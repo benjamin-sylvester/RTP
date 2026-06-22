@@ -56,7 +56,22 @@ THREE FIXES applied + verified on clean 90-day dry-run (58 msgs -> 77 listings: 
    package #1 asking_price ($1.725M) instead of wrongly enriching parcel #13. Parcels still enrich
    #13/#14/#15.
 
-NEXT (after Ben verifies this clean sample): --commit the real backfill, then wire 15-min cron
-(APScheduler/Railway) + 'RTP/Ingested' label on processed threads. Known minor gaps: Armory vision
-returns the owner LLC as address (not "3 Armory Rd"); some primemls cards lack units. git push still
-pending (no remote). See [[phase0-state]] and [[BUILD_PLAN]].
+REAL BACKFILL COMMITTED (90 days, after 2026/03/24): DB now has 72 listings. v_pipeline = 12
+standalone leads + package #1 ($1.725M). needs_review queue = 12 (9 in-box NH-corridor deals with
+unknown units + 3 addressless orphans). 101-107 Putnam is a single lead (#322, appears once in
+corpus). Price changes logged to listing_history: 33-35 Malvey $844.8k->$820k, 771 Rock $699.9k->
+$649.9k.
+
+Two more routing/enrich rules added: (1) routing.py — NH-corridor deal with UNKNOWN units + ok price
+-> needs_review (don't let a missing 'Total Units' bury a lead); out-of-box unknown-units stay
+comp_only. (2) dedup.enrich — asking_price CHANGE (newer differs from stored) updates current +
+logs to listing_history (motivated-seller signal); backfill runs OLDEST-FIRST so newest price wins.
+
+CRON WIRED: ingest/runner.py (run_once: process Deal Flow msgs lacking 'RTP/Ingested' label after
+floor 2026/03/24, upsert, per-message commit+label; oldest-first; idempotent forward-only),
+scripts/run_ingest.py (CLI: default=process, --dry, --label-baseline), scripts/scheduler.py
+(APScheduler every INGEST_INTERVAL_MINUTES=15). Baseline-labeled the 58 backfilled msgs; run_once
+now finds 0 unprocessed. TO RUN THE LOOP: start scripts/scheduler.py as a worker, or Railway cron
+running run_ingest.py every 15 min. Known minor gaps: Armory vision returns owner LLC as address;
+some primemls cards lack units (now safely -> needs_review). git push STILL pending (no remote).
+Phase 1 effectively complete; next is Phase 2 (auto-underwriting). See [[phase0-state]], [[BUILD_PLAN]].

@@ -181,14 +181,27 @@ def enrich(conn, lid, cand, source_label=""):
             _log(cur, lid, col, existing[col], stored)
             changed.append(col)
 
-    # recompute price_per_unit (cents) if we now have both and it's currently null
+    # price change (time-series field): a newer ask that differs from the stored
+    # one is a real price move (motivated-seller signal), not a null to fill.
+    # Update the current value AND log the change. (Backfill runs oldest-first so
+    # 'cand' is the newer observation; the live cron is naturally chronological.)
+    cand_ask = _cents(cand.get("asking_price"))
+    if (cand_ask is not None and existing["asking_price"] is not None
+            and cand_ask != existing["asking_price"] and "asking_price" not in updates):
+        _log(cur, lid, "asking_price", existing["asking_price"], cand_ask)
+        updates["asking_price"] = cand_ask
+        changed.append("asking_price")
+
+    # (re)compute price_per_unit when price was set/changed or ppu is missing
     units_final = updates.get("units", existing["units"])
     ask_final = updates.get("asking_price", existing["asking_price"])
-    if existing["price_per_unit"] is None and ask_final and units_final:
+    if ask_final and units_final and ("asking_price" in updates or existing["price_per_unit"] is None):
         ppu = round(ask_final / units_final)
-        updates["price_per_unit"] = ppu
-        _log(cur, lid, "price_per_unit", None, ppu)
-        changed.append("price_per_unit")
+        if ppu != existing["price_per_unit"]:
+            _log(cur, lid, "price_per_unit", existing["price_per_unit"], ppu)
+            updates["price_per_unit"] = ppu
+            if "price_per_unit" not in changed:
+                changed.append("price_per_unit")
 
     if updates:
         sets = ", ".join(f"{c}=%s" for c in updates)

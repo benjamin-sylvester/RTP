@@ -26,8 +26,10 @@ def usd(cents):
 def main():
     svc = gc.service()
     session = requests.Session()
-    ids = gc.list_message_ids(svc, "Deal Flow", after=after)
-    print(f"Window: after {after}  |  {len(ids)} messages\n")
+    # oldest-first so a listing's newest price ends up current and price changes
+    # log in chronological order to listing_history.
+    ids = list(reversed(gc.list_message_ids(svc, "Deal Flow", after=after)))
+    print(f"Window: after {after}  |  {len(ids)} messages (oldest-first)\n")
 
     rows, n_listings, actions = [], 0, {"enriched": 0, "inserted": 0}
     with connect(autocommit=False) as conn:
