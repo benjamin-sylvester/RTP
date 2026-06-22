@@ -1,0 +1,53 @@
+# RTP Buy Box: single source of truth.
+# Read by BOTH the app (underwriting filter) and Cowork (deal triage).
+# CONFIRMED by Ben 2026-06-22: Southern NH only for now. MA is out of box.
+
+version: 2026-06-22
+status: confirmed
+
+units:
+  min: 5
+  max: 34
+  preference: ">=15"
+
+property_class: [B, C]
+
+price:
+  min_usd: 500000
+  max_usd: 5000000
+
+year_built:
+  min: 1940            # avoid pre-war structural risk
+
+strategy:
+  - value_add          # below-market rents, reno upside, deferred maintenance
+  - on_market
+  - off_market
+
+geography:
+  state: NH
+  region: Southern NH
+  corridors:
+    - name: "I-93 / Merrimack Valley"
+      markets: [Manchester, Nashua, Derry, Londonderry, Salem]
+    - name: "Strafford County"
+      markets: [Dover, Rochester, Somersworth, Farmington, Milton]
+
+# Scoring weights for the composite 0-100 score (auto_underwriting.score)
+scoring_weights:
+  cap_rate_stabilized: 0.25
+  price_per_unit_vs_market: 0.20
+  rent_upside_pct: 0.20
+  dscr: 0.15
+  unit_count_sweet_spot: 0.10   # peak at 12-20 units
+  days_on_market: 0.10
+
+# Underwriting assumptions for the quick screen
+assumptions:
+  expense_ratio_default: 0.475   # 45-50%, refine as data accumulates
+  ltv: 0.65
+  amortization_years: 30
+  reno_per_unit_usd: 10000
+  stabilized_occupancy: 0.95
+  exit_cap_compression_bps: 25
+  dscr_floor: 1.20

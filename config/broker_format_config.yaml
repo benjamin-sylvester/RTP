@@ -1,0 +1,53 @@
+# Per-source ingestion config for RTP's 5 known deal-flow senders.
+# MLS exports (structured) parse with pandas via field_map.
+# Free-form emails and PDF OMs route to the Claude API parser (parse: ai).
+# All five currently land in the Gmail "Deal Flow" label.
+
+sources:
+
+  mlspin:
+    display_name: "MLS PIN (Pinergy)"
+    from: ["pinergy@mlspin.com"]
+    via: ["James Roche", "Sophie Shea"]
+    format: html_email          # structured listing data in HTML body
+    parse: html
+    field_map:
+      address: STREET_ADDRESS
+      units: NUM_UNITS
+      asking_price: LIST_PRICE
+      year_built: YR_BUILT
+      building_sf: TOTAL_SF
+      avg_rent: AVG_RENT
+      external_id: MLS_NUMBER
+
+  primemls:
+    display_name: "PrimeMLS (Paragon Collaboration Center)"
+    from: ["email@paragonmessaging.com"]
+    via: ["Justin Porter"]
+    format: html_email          # listing previews: address, price, MLS#, sqft
+    parse: html
+    field_map:
+      address: Property Address
+      asking_price: Price
+      building_sf: SqFt
+      external_id: MLS #
+
+  porter:
+    display_name: "Justin Porter (Porter Capital REI)"
+    from: ["justin@portercapitalrei.com"]
+    format: freeform_email      # off-market NH deals, key relationship
+    parse: ai
+
+  candor:
+    display_name: "Candor Realty / Investment Group"
+    from: ["info@candorealty.com"]
+    format: newsletter          # mix of real off-market deals and meetup noise
+    parse: ai
+    notes: "Filter out meetup/event invites; only parse actual listings."
+
+  northeast_pcg:
+    display_name: "Northeast PCG"
+    from: ["tperun@northeastpcg.com"]
+    via: ["T. Perun"]
+    format: offering_memo       # institutional-style OMs (PDF)
+    parse: ai
