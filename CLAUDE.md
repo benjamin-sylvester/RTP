@@ -30,7 +30,14 @@ database via a Postgres MCP. Documents live in Google Drive and are linked from 
 - **Broker column mappings live in `config/broker_format_config.yaml`** (and/or the
   `broker_format_config` table). Add a new broker by adding a config entry, not code.
 - **Dedup before insert:** match on (a) external_id/MLS, then (b) fuzzy address+city, then
-  (c) address+units+price within 5%. On match, UPDATE and log to `listing_history`.
+  (c) city + units + price/GSI within 5%, BUT only when one side lacks a usable address (this
+  tier catches the SAME deal from a DIFFERENT sender/thread, e.g. an MLS blast and an addressless
+  off-market email; two records with DISTINCT real addresses are never merged by (c) — tiers a/b
+  govern those, to avoid collapsing two different properties that happen to share city/units/price).
+  On match,
+  **ENRICH** the existing row: fill null fields, prefer the more complete / higher-confidence
+  value, and raise `listing_financials.confidence` accordingly. Never blind-overwrite good data
+  and never create a duplicate row. Log every changed field to `listing_history`.
 - **Routing:** buy box fit or borderline -> status `lead`. Otherwise status `comp_only`.
   One table, never a second database.
 - **Packages:** multi-parcel deals group under the `packages` table (migration 001) with
