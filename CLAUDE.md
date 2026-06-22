@@ -38,6 +38,9 @@ database via a Postgres MCP. Documents live in Google Drive and are linked from 
   **ENRICH** the existing row: fill null fields, prefer the more complete / higher-confidence
   value, and raise `listing_financials.confidence` accordingly. Never blind-overwrite good data
   and never create a duplicate row. Log every changed field to `listing_history`.
+- **No orphan rows:** never persist a listing that has NEITHER a usable address NOR an
+  external_id/MLS#. Dedup cannot protect such rows, so they silently breed duplicates.
+  Quarantine them (a `needs_review` status / flag) for manual resolution instead of inserting.
 - **Routing:** buy box fit or borderline -> status `lead`. Otherwise status `comp_only`.
   One table, never a second database.
 - **Packages:** multi-parcel deals group under the `packages` table (migration 001) with

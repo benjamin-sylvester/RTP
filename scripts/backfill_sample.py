@@ -36,7 +36,7 @@ def main():
             bkey, path, cands = pipeline.extract_candidates(svc, msg, session)
             tag = bkey or "(unmatched)"
             if not cands:
-                rows.append((tag, path or "-", msg["subject"][:34], "no listing", "", ""))
+                rows.append((tag, path or "-", msg["subject"][:30], "-", "", "no listing", ""))
                 continue
             for c in cands:
                 n_listings += 1
@@ -44,20 +44,24 @@ def main():
                                    raw_email_id=c.get("_thread_id"), session=session)
                 actions[res["action"]] = actions.get(res["action"], 0) + 1
                 loc = f"{(c.get('address') or '?')[:20]}, {c.get('city') or '?'} {c.get('state') or ''}"
+                units = c.get("units")
                 if res["action"] == "enriched":
                     detail = f"#{res['listing_id']} via {res['tier']} (+{len(res['changed'])} fields)"
+                elif res["action"] == "linked_package":
+                    detail = f"pkg #{res['package_id']} via {res['matched_on']} (+{len(res['changed'])})"
                 else:
                     detail = f"#{res['listing_id']} -> {res['status']}"
-                rows.append((tag, path, loc[:30],
+                rows.append((tag, path, loc[:30], str(units) if units is not None else "-",
                              usd(dedup._cents(c.get("asking_price"))),
                              res["action"], detail))
         # report
-        print(f"{'broker':<13}{'path':<11}{'location':<31}{'ask':>11}  {'action':<9}{'detail'}")
-        print("-" * 118)
-        for tag, path, loc, ask, action, detail in rows:
-            print(f"{tag:<13}{(path or '-'):<11}{loc:<31}{ask:>11}  {action:<9}{detail}")
+        print(f"{'broker':<13}{'path':<11}{'location':<31}{'un':>4}{'ask':>12}  {'action':<9}{'detail'}")
+        print("-" * 120)
+        for tag, path, loc, units, ask, action, detail in rows:
+            print(f"{tag:<13}{(path or '-'):<11}{loc:<31}{units:>4}{ask:>12}  {action:<9}{detail}")
         print(f"\n{len(ids)} messages -> {n_listings} listing(s): "
-              f"{actions.get('inserted',0)} new, {actions.get('enriched',0)} enriched.")
+              f"{actions.get('inserted',0)} new, {actions.get('enriched',0)} enriched, "
+              f"{actions.get('linked_package',0)} pkg-linked.")
 
         if COMMIT:
             conn.commit(); print("COMMITTED to database.")

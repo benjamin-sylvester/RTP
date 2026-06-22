@@ -41,8 +41,22 @@ merged via MLS# across self_forward + primemls (no dup); routing correct. Sample
 default (--commit to persist). NOTE structured field_map in config is unused — real MLS emails are
 HTML cards; parsed by regex in structured.py.
 
-NEXT (after Ben verifies sample): widen backfill if needed (gate wants 10-15 listings; 2wk only had
-7), then --commit the real backfill, then wire 15-min cron (APScheduler/Railway) + 'RTP/Ingested'
-label on processed threads. Pipeline code is committed through e96074d ONLY — dedup/structured/
-attachments/pipeline still UNCOMMITTED. Also: CLAUDE.md dedup-rule edit + git push still pending
-(no remote). See [[phase0-state]] and [[BUILD_PLAN]].
+THREE FIXES applied + verified on clean 90-day dry-run (58 msgs -> 77 listings: 46 new, 30 enriched,
+1 pkg-linked, 3 quarantined):
+1. MLS-PIN addressless cards: regex now tolerates the search-area label, e.g. "26 Lee St, Worcester:
+   WPI, MA" -> city Worcester. No more "?,?" orphan inserts.
+2. No-orphan rule (CLAUDE.md): a candidate with no house-numbered address AND no MLS# is quarantined
+   as status `needs_review` (dedup.is_orphan / insert_listing) instead of inserted as lead/comp.
+   E.g. Candor city-only "?, Manchester" with no price/MLS -> needs_review. (Matches via tier-c still
+   enrich.)
+3. PDF vision: image/boilerplate PDFs that yield no text now render to PNGs (attachments.pdf_to_images)
+   and go to Claude vision (parsers.ai_extract_images); pipeline tries text first, vision on empty
+   result. Armory rider extracted (3 units, unit mix, GSI); two rider msgs dedupe on shared MLS#.
+4. Package link: combined range listing "377-383 Manchester St" -> dedup.try_link_package sets
+   package #1 asking_price ($1.725M) instead of wrongly enriching parcel #13. Parcels still enrich
+   #13/#14/#15.
+
+NEXT (after Ben verifies this clean sample): --commit the real backfill, then wire 15-min cron
+(APScheduler/Railway) + 'RTP/Ingested' label on processed threads. Known minor gaps: Armory vision
+returns the owner LLC as address (not "3 Armory Rd"); some primemls cards lack units. git push still
+pending (no remote). See [[phase0-state]] and [[BUILD_PLAN]].

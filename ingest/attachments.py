@@ -50,6 +50,21 @@ def pdf_text(data, max_pages=6):
     return "\n".join(parts).strip()
 
 
+def pdf_to_images(data, max_pages=5, dpi=150):
+    """Render PDF pages to PNG bytes (for image-based OMs/riders that have no text)."""
+    try:
+        doc = fitz.open(stream=io.BytesIO(data), filetype="pdf")
+    except Exception:
+        return []
+    out = []
+    for i, page in enumerate(doc):
+        if i >= max_pages:
+            break
+        pix = page.get_pixmap(dpi=dpi)
+        out.append(pix.tobytes("png"))
+    return out
+
+
 def classify(filename, mime):
     fn = (filename or "").lower()
     if mime == "application/pdf" or fn.endswith(".pdf"):

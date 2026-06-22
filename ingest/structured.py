@@ -11,8 +11,10 @@ from ingest.parsers import html_to_text
 _MONEY = r"\$\s*([\d,]+)"
 # "45 Laurel St, Leominster, MA" (single-line, MLS-PIN style). Intra-street spacing
 # is [ \t] only so the match cannot bleed across the preceding price line's newline.
+# The optional (?::[^,\n]*) swallows MLS-PIN's search-area label, e.g.
+# "26 Lee St, Worcester: WPI, MA" -> city 'Worcester'.
 _ADDR_INLINE = re.compile(
-    r"(\d+[\w\-]*[ \t]+[^,\n]+?),\s*([A-Za-z .'-]+?),\s*([A-Z]{2})(?:\s+(\d{5}))?")
+    r"(\d+[\w\-]*[ \t]+[^,\n]+?),\s*([A-Za-z .'-]+?)(?::[^,\n]*)?,\s*([A-Z]{2})(?:\s+(\d{5}))?")
 # "Manchester, NH 03102" (city/state/zip on its own line, PrimeMLS style)
 _CITY_LINE = re.compile(r"^([A-Za-z .'-]+?),\s*([A-Z]{2})\s+(\d{5})", re.M)
 

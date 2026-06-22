@@ -5,7 +5,7 @@ filenames; falls back to PDF-OM text extraction when the body yields nothing.
 Returns candidate dicts ready for dedup.upsert(). Does not write to the DB."""
 from ingest import gmail_client as gc
 from ingest import structured, attachments
-from ingest.parsers import ai_extract, html_to_text
+from ingest.parsers import ai_extract, ai_extract_images, html_to_text
 
 # listings.source value by parse path
 _SOURCE = {"structured": "mls_export", "ai": "broker_email"}
@@ -31,7 +31,9 @@ def extract_candidates(svc, msg, session=None):
         body = msg["plain"].strip() or html_to_text(msg["html"])
         cands = ai_extract(body, source_label=f"{bkey} / {msg['from_email']}").get("listings", [])
 
-    # 2) PDF-OM fallback: no body listings but an OM pdf is attached
+    # 2) PDF-OM fallback: no body listings but an OM pdf is attached.
+    #    Try text extraction; if the PDF is image-based (no text), render pages
+    #    to images and use Claude vision.
     if not cands:
         for a, kind in att_types:
             if kind in ("om_pdf", "rent_roll", "t12") and a.get("attachment_id"):
@@ -40,8 +42,16 @@ def extract_candidates(svc, msg, session=None):
                 if text:
                     cands = ai_extract(text, source_label=f"{bkey} OM / {a['filename']}").get("listings", [])
                     path = "ai_pdf"
-                    if cands:
-                        break
+                # vision fallback when there is no text OR the text yielded nothing
+                # (image-based riders, or text that is just disclosure boilerplate)
+                if not cands:
+                    images = attachments.pdf_to_images(data)
+                    if images:
+                        cands = ai_extract_images(
+                            images, source_label=f"{bkey} OM / {a['filename']}").get("listings", [])
+                        path = "ai_pdf_vision"
+                if cands:
+                    break
 
     # 3) enrich a single addressless listing from a single filename hint
     if len(cands) == 1 and filename_hints:

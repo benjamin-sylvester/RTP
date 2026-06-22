@@ -242,6 +242,17 @@ def enrich(conn, lid, cand, source_label=""):
 
 
 # ---------------------------------------------------------------- insert
+def _usable_address(cand):
+    a = cand.get("address")
+    return bool(_house_num(a)) and not _blank(a)
+
+
+def is_orphan(cand):
+    """No-orphan rule: neither a usable (house-numbered) address NOR an MLS#.
+    Such rows are undedupable and silently breed duplicates."""
+    return not _usable_address(cand) and not cand.get("external_id")
+
+
 def insert_listing(conn, cand, source, raw_email_id=None, session=None):
     cur = conn.cursor()
     lat, lon, method = geocode(cand.get("address"), cand.get("city"),
@@ -249,8 +260,12 @@ def insert_listing(conn, cand, source, raw_email_id=None, session=None):
     units = cand.get("units")
     ask_cents = _cents(cand.get("asking_price"))
     ppu = round(ask_cents / units) if (ask_cents and units) else None
-    status, reasons = routing.route(cand.get("state"), cand.get("city"),
-                                    units, cand.get("asking_price"))
+    if is_orphan(cand):
+        status = "needs_review"
+        reasons = ["quarantined (no-orphan rule): no usable address and no MLS#"]
+    else:
+        status, reasons = routing.route(cand.get("state"), cand.get("city"),
+                                        units, cand.get("asking_price"))
     raw = {k: cand.get(k) for k in ("unit_mix", "gross_revenue", "noi")}
     raw.update({"geocode_method": method, "routing_reasons": reasons,
                 "ingest_source": source})
@@ -271,9 +286,60 @@ def insert_listing(conn, cand, source, raw_email_id=None, session=None):
     return cur.fetchone()[0], status
 
 
+# ---------------------------------------------------------------- packages
+_RANGE = re.compile(r"^\s*(\d+)\s*-\s*(\d+)\s+(.+)$")
+
+
+def try_link_package(conn, cand):
+    """If the candidate is a hyphenated street-RANGE listing (e.g. '377-383 Manchester
+    St') whose span covers an existing package's member parcels on the same street/city,
+    treat it as the package's combined market listing: set the package ask (+ record the
+    MLS#) and do NOT create/enrich a parcel row. Returns a link dict or None."""
+    m = _RANGE.match(cand.get("address") or "")
+    if not m:
+        return None
+    lo, hi = sorted((int(m.group(1)), int(m.group(2))))
+    street_core = _street_core(m.group(3))
+    city = (cand.get("city") or "").strip()
+    if not (street_core and city):
+        return None
+    cur = conn.cursor()
+    rows = cur.execute(
+        "SELECT package_id, address FROM listings "
+        "WHERE package_id IS NOT NULL AND lower(city)=lower(%s)", (city,)).fetchall()
+    by_pkg = {}
+    for pid, a in rows:
+        by_pkg.setdefault(pid, []).append(a)
+    for pid, addrs in by_pkg.items():
+        nums = [_house_num(a) for a in addrs]
+        cores = {_street_core(a) for a in addrs}
+        if street_core in cores and nums and all(n and lo <= int(n) <= hi for n in nums):
+            ask = _cents(cand.get("asking_price"))
+            ext = cand.get("external_id")
+            updated = []
+            if ask is not None:
+                cur.execute(
+                    "UPDATE packages SET asking_price=%s WHERE id=%s "
+                    "AND asking_price IS DISTINCT FROM %s", (ask, pid, ask))
+                if cur.rowcount:
+                    updated.append("asking_price")
+            if ext:
+                cur.execute(
+                    "UPDATE packages SET notes = COALESCE(notes,'') || %s "
+                    "WHERE id=%s AND (notes IS NULL OR notes NOT LIKE %s)",
+                    (f" [combined MLS#{ext}]", pid, f"%MLS#{ext}%"))
+            return {"package_id": pid, "updated": updated, "mls": ext}
+    return None
+
+
 # ---------------------------------------------------------------- orchestration
 def upsert(conn, cand, source, raw_email_id=None, session=None):
     """Returns dict describing the action taken."""
+    link = try_link_package(conn, cand)
+    if link:
+        return {"action": "linked_package", "listing_id": None,
+                "package_id": link["package_id"], "matched_on": f"MLS#{link['mls']}",
+                "changed": link["updated"]}
     lid, tier, detail = find_match(conn, cand)
     if lid:
         changed = enrich(conn, lid, cand, source)
