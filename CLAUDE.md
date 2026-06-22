@@ -33,6 +33,9 @@ database via a Postgres MCP. Documents live in Google Drive and are linked from 
   (c) address+units+price within 5%. On match, UPDATE and log to `listing_history`.
 - **Routing:** buy box fit or borderline -> status `lead`. Otherwise status `comp_only`.
   One table, never a second database.
+- **Packages:** multi-parcel deals group under the `packages` table (migration 001) with
+  member listings via `listings.package_id`. Evaluate buy box on `v_deals.effective_units`
+  (combined unit count), NOT per parcel. Unit floor is 4, max 34 (see buy_box.yaml).
 - **Every listing carries Drive pointers** when documents exist (`drive_folder_id`,
   `om_url`, `boe_url`).
 - Keep secrets in `.env` (see `.env.example`). Never commit `.env`.

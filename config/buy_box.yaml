@@ -1,14 +1,17 @@
 # RTP Buy Box: single source of truth.
 # Read by BOTH the app (underwriting filter) and Cowork (deal triage).
-# CONFIRMED by Ben 2026-06-22: Southern NH only for now. MA is out of box.
+# CONFIRMED by Ben 2026-06-22: Southern NH only. MA is out of box. Floor = 4 units.
 
-version: 2026-06-22
+version: 2026-06-22b
 status: confirmed
 
 units:
-  min: 5
+  min: 4                       # lowered from 5 (Ben, Jun 22) for strong Strafford deals
   max: 34
   preference: ">=15"
+  # Count units at the PORTFOLIO/PACKAGE level, not per building. A multi-parcel
+  # package (e.g. 3x 3-unit = 9 units) is evaluated on its combined unit count.
+  count_basis: package_level
 
 property_class: [B, C]
 
