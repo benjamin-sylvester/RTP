@@ -48,6 +48,46 @@ sources:
   northeast_pcg:
     display_name: "Northeast PCG"
     from: ["tperun@northeastpcg.com"]
-    via: ["T. Perun"]
+    domains: ["northeastpcg.com"]   # any rep at the firm (e.g. fsaenz@) maps here
+    via: ["T. Perun", "F. Saenz"]
     format: offering_memo       # institutional-style OMs (PDF)
     parse: ai
+
+  # ---- added 2026-06-22 after corpus survey (senders found under Deal Flow) ----
+
+  cbrealty:
+    display_name: "Coldwell Banker (Sophie Shea, direct)"
+    from: ["sophie.shea@cbrealty.com"]
+    domains: ["cbrealty.com"]
+    format: freeform_email      # direct agent emails (not the Pinergy HTML feed)
+    parse: ai
+    notes: "Sophie also appears as an MLS-PIN 'via'; this is her direct mail."
+
+  fallriverpm:
+    display_name: "Fall River Property Management"
+    from: ["lpachon@fallriverpm.com"]
+    domains: ["fallriverpm.com"]
+    format: flipbook            # off-market MA deals as HTML 'flipbook' attachments
+    parse: ai
+    notes: "MA/New Bedford off-market; out of state box -> comp_only. Parse HTML attachments."
+
+  bchomebuyers:
+    display_name: "BC Home Buyers (Lauren)"
+    from: ["lauren@bchomebuyers.com"]
+    domains: ["bchomebuyers.com"]
+    format: freeform_email      # wholesaler
+    parse: ai
+
+  htapartments:
+    display_name: "HT Apartments"
+    from: ["ssmith@htapartments.com"]
+    domains: ["htapartments.com"]
+    format: freeform_email
+    parse: ai
+
+  self_forward:
+    display_name: "Ben (forwarded deals)"
+    from: ["ben.sylvester18@gmail.com", "ben@rtprei.com"]
+    format: forwarded_email     # original deal embedded in the forwarded body
+    parse: ai
+    notes: "Ben forwarding a deal to himself; AI parser must unwrap the original sender/source from the forwarded headers in the body."
