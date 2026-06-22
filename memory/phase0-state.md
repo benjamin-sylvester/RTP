@@ -27,10 +27,13 @@ Two packages grouped from existing parcels via `scripts/apply_packages.py`: #1 3
 (4 parcels, 12 units, comp_only, RI/out-of-box). Member parcels keep their own status but drop out
 of the standalone `v_deals` list and roll up on combined units.
 
-The `RTP_DealFlow_Triage_2026-06-22.xlsx` file now exists (9-row "Deal Flow Log"). REVIEWED but NOT
-yet seeded into `listings` — it overlaps the Deal Database (Providence row = same thread as the 4
-seeded parcels) and has TBD addresses/units, so seeding needs dedup care. Triage surfaces ~6 NH
-deals (Manchester 339-341 Amherst, Dover 805 Central = the 4-unit deal the 5->4 floor change unlocks,
-Nashua 6-unit, Nashua 1&3 Armory [2-parcel pkg], Cushing, 14-unit TBD-location) plus out-of-box
-comps (Hampton Beach 46u 4-prop pkg Ben starred, Fall River 3-pack). Next: decide seed strategy for
-triage NH deals, then Phase 1 (ingestion) per [[BUILD_PLAN]].
+From `RTP_DealFlow_Triage_2026-06-22.xlsx` (9-row "Deal Flow Log"), Ben had me seed only 3 NH deals
+as leads via `scripts/seed_triage.py` (ids 23-25), each with `raw_email_id` = its Gmail thread id so
+Phase 1 dedups on thread: 339-341 Amherst St Manchester (6u $1.35M, 19edc469c20448dd), 805 Central Ave
+Dover (4u $800k, 19edc4628cc30d16 — the deal the 5->4 floor unlocks), Nashua 6-unit addr TBD (no price,
+19e7064253032ca2). Deliberately NOT seeded: dataless rows (Cushing, 14-unit unknown loc) and PDF-rider
+packages (1&3 Armory Rd) — Phase 1 ingests those from source. Hampton Beach 46u and Fall River 3-pack
+left as comp_only watch, no action. Listings now total 25; 8 standalone leads in v_pipeline.
+
+Next is Phase 1 (ingestion) per [[BUILD_PLAN]]. NOTE: git push still pending — repo has no remote and
+`gh` is not installed; needs a GitHub remote URL before any push.
