@@ -4,6 +4,7 @@
 """
 import sys
 import pathlib
+from datetime import datetime
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from _conn import connect
@@ -17,11 +18,16 @@ def main():
     to = None
     if "--to" in sys.argv:
         to = sys.argv[sys.argv.index("--to") + 1]
+    # --since YYYY-MM-DD: display-only window override (dry-run; never touches the
+    # stored last_briefed_at). Useful to preview the full active pipeline.
+    since_override = (datetime.fromisoformat(sys.argv[sys.argv.index("--since") + 1])
+                      if "--since" in sys.argv else None)
     preview = None if send else str(ROOT / "briefing_preview.html")
     svc = gc.service() if send else None
 
     with connect(autocommit=False) as conn:
-        res = briefing.run(conn, svc=svc, send=send, to=to, preview_path=preview)
+        res = briefing.run(conn, svc=svc, send=send, to=to, preview_path=preview,
+                           since_override=since_override)
         d = res["data"]
         print(f"since: {res['since']:%Y-%m-%d %H:%M}")
         print(f"subject: {res['subject']}")

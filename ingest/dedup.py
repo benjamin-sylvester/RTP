@@ -161,6 +161,10 @@ def enrich(conn, lid, cand, source_label=""):
     cur = conn.cursor()
     changed = []
 
+    # A dedup match means the deal was re-seen now -> refresh freshness (even if no
+    # field changes), so re-appearing deals keep their pipeline lead status.
+    cur.execute("UPDATE listings SET last_seen_at=NOW() WHERE id=%s", (lid,))
+
     cur_row = cur.execute(
         "SELECT address, zip, year_built, building_sf, lot_sf, units, asking_price, "
         "price_per_unit, broker_name, broker_email, listing_date, external_id, "

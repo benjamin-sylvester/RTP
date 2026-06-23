@@ -50,17 +50,18 @@ scoring_weights:
   days_on_market: 0.10
 
 # Coarse triage tiers from the 0-100 score (in-box deals only; out-of-box -> Pass).
-# Tier is a sort bucket, never a reject. Read by the scorer; never hardcode.
+# Tier is a sort bucket, never a reject. Read by the scorer, never hardcode.
+# watch_min sits in the empirical gap between Ben's hand-No deals (~30) and hand-YES (~42).
 tiers:
   priority_min: 65
   watch_min: 40
 
-# Triage tier cutoffs on the composite score. Read by the underwriter, never hardcoded.
-# Calibrated to the empirical gap between Ben's hand-No deals (top out ~30) and his
-# hand-YES deals (start ~42). watch_min sits in that gap so every YES lands >= Watch.
-tiers:
-  priority_min: 65
-  watch_min: 40
+# Pipeline freshness: a lead is "active" only while recently seen. A lead whose last_seen is
+# older than active_lead_days auto-demotes to status 'stale' (stays in the DB as a comp, drops
+# off the active pipeline + briefing). Reactivate manually anytime. MLS deals that keep
+# reappearing in digests refresh last_seen and stay active on their own.
+pipeline:
+  active_lead_days: 45          # Ben to confirm; on-market deals can live 60-90d, off-market go quiet faster
 
 # Underwriting assumptions for the quick screen
 assumptions:

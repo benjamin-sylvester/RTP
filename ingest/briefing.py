@@ -160,8 +160,8 @@ def render_html(data, since):
     return "\n".join(parts), header
 
 
-def run(conn, svc=None, send=False, to=None, preview_path=None):
-    since = get_since(conn)
+def run(conn, svc=None, send=False, to=None, preview_path=None, since_override=None):
+    since = since_override or get_since(conn)
     data = gather(conn, since)
     rendered = render_html(data, since)
     html, header = rendered if isinstance(rendered, tuple) else (rendered, "quiet day")
