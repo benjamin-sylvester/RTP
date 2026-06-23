@@ -26,11 +26,13 @@ def main():
     with connect(autocommit=False) as conn:
         demoted = freshness.sweep(conn)
         print(f"active_lead_days = {freshness.active_lead_days()}")
-        print(f"leads demoted -> stale: {len(demoted)}")
-        for lid, addr, city, seen in demoted:
-            print(f"  #{lid} {(addr or '?')[:26]:<27}{city:<12} last_seen {seen:%Y-%m-%d}")
-        still = conn.execute("SELECT count(*) FROM listings WHERE status='lead'").fetchone()[0]
-        print(f"leads still active: {still}")
+        print(f"deals demoted -> stale: {len(demoted)}")
+        for d in demoted:
+            print(f"  [{d['kind']}] #{d['id']} {(d['name'] or '?')[:26]:<27}"
+                  f"{(d['market'] or ''):<12} last_seen {d['last_seen']:%Y-%m-%d}")
+        still_l = conn.execute("SELECT count(*) FROM listings WHERE status='lead'").fetchone()[0]
+        still_p = conn.execute("SELECT count(*) FROM packages WHERE status='lead'").fetchone()[0]
+        print(f"leads still active: {still_l} listings + {still_p} packages")
         if COMMIT:
             conn.commit(); print("COMMITTED.")
         else:

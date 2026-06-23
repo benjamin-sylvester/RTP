@@ -36,8 +36,13 @@ the backfill), so nothing aged out. `scripts/backfill_last_seen.py` corrects it 
 source date = most recent Gmail internalDate across its raw_email_id thread AND any digest carrying
 its external_id/MLS#, then listing_date, then date_ingested (70 gmail / 2 listing_date). After that,
 sweep (active_lead_days 45, cutoff ~May 8) demoted 5 leads -> stale (4 Candor Manchester last seen
-2026-03-24, 9 Carroll Pittsfield 2026-04-02); 7 listing-leads + package = 8 active. NOTE: packages
-aren't swept (no last_seen_at on packages table) — pkg #1 stays active regardless.
+2026-03-24, 9 Carroll Pittsfield 2026-04-02); 7 listing-leads + package = 8 active.
+
+PACKAGE FRESHNESS (migration 006): `packages.last_seen_at` = max(member last_seen_at); the sweep
+recomputes it and demotes stale 'lead' packages too. Package #1 (377-383 Manchester) last_seen
+2026-04-03 would have aged out, but Ben set it to status 'underwriting' (actively pursued, RR+P&L
+received April) -> exempt, stays in pipeline. Briefing now splits lead->stale demotions into their
+own "AGED OUT (N)" line (not under MARKET MOVES, which is comps only).
 
 NEXT (gated): Ben checks the inbox copy, THEN schedule the daily 6:30am job = sweep + briefing
 (alongside the 15-min ingestion cron). NOT scheduled yet. See [[phase3-state]].

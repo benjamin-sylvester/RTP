@@ -11,18 +11,31 @@ def active_lead_days():
 
 
 def sweep(conn):
-    """Demote lead -> stale where last_seen_at older than active_lead_days. Logs each
-    status change to listing_history. Returns the demoted rows."""
+    """Demote stale leads (listings AND packages) -> 'stale' past active_lead_days.
+    Packages are as fresh as their most recent member. underwriting/under_contract are
+    never touched. Logs listing status changes to listing_history. Returns demoted rows
+    as dicts: {kind, id, name, market, last_seen}."""
     days = active_lead_days()
-    rows = conn.execute(
-        "UPDATE listings SET status='stale' "
-        "WHERE status='lead' AND last_seen_at < NOW() - make_interval(days => %s) "
-        "RETURNING id, address, city, last_seen_at", (days,)).fetchall()
-    for lid, *_ in rows:
+    cutoff = f"NOW() - make_interval(days => {int(days)})"
+
+    # keep package freshness current = max(member last_seen_at)
+    conn.execute("UPDATE packages p SET last_seen_at = "
+                 "(SELECT max(l.last_seen_at) FROM listings l WHERE l.package_id = p.id)")
+
+    out = []
+    for lid, addr, city, seen in conn.execute(
+        f"UPDATE listings SET status='stale' WHERE status='lead' AND last_seen_at < {cutoff} "
+        f"RETURNING id, address, city, last_seen_at").fetchall():
         conn.execute(
             "INSERT INTO listing_history (listing_id, field, old_value, new_value) "
             "VALUES (%s, 'status', 'lead', 'stale')", (lid,))
-    return rows
+        out.append({"kind": "listing", "id": lid, "name": addr, "market": city, "last_seen": seen})
+
+    for pid, name, market, seen in conn.execute(
+        f"UPDATE packages SET status='stale' WHERE status='lead' AND last_seen_at < {cutoff} "
+        f"RETURNING id, name, market, last_seen_at").fetchall():
+        out.append({"kind": "package", "id": pid, "name": name, "market": market, "last_seen": seen})
+    return out
 
 
 def reactivate(conn, listing_id):

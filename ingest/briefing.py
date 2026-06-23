@@ -69,12 +69,15 @@ def gather(conn, since):
         "raw_data->'routing_reasons'->>0 FROM listings WHERE status='needs_review' "
         "ORDER BY state, city").fetchall()
 
-    # split changes: pipeline deals vs market comps (so comp price cuts aren't mistaken for leads)
-    pipeline_changes = [c for c in changes if c[3] in PIPELINE_STATUSES]
-    market_changes = [c for c in changes if c[3] not in PIPELINE_STATUSES]
-    price_cuts = [c for c in changes if c[4] == "asking_price" and int(c[6]) < int(c[5])]
+    # aged-out leads (lead -> stale demotions) get their own line — not comps
+    aged_out = [c for c in changes if c[4] == "status" and c[6] == "stale" and c[5] == "lead"]
+    rest = [c for c in changes if c not in aged_out]
+    # remaining changes: pipeline deals vs market comps
+    pipeline_changes = [c for c in rest if c[3] in PIPELINE_STATUSES]
+    market_changes = [c for c in rest if c[3] not in PIPELINE_STATUSES]
+    price_cuts = [c for c in rest if c[4] == "asking_price" and int(c[6]) < int(c[5])]
     return {"new_leads": new_leads, "pipeline_changes": pipeline_changes,
-            "market_changes": market_changes, "price_cuts": price_cuts,
+            "market_changes": market_changes, "price_cuts": price_cuts, "aged_out": aged_out,
             "enrich_n": enrich_n, "needs_review": needs_review}
 
 
@@ -98,11 +101,11 @@ def _lead_card(r):
 
 def render_html(data, since):
     nl, pc, nr = data["new_leads"], data["price_cuts"], data["needs_review"]
-    pipe_ch, mkt_ch = data["pipeline_changes"], data["market_changes"]
+    pipe_ch, mkt_ch, aged = data["pipeline_changes"], data["market_changes"], data["aged_out"]
     header = (f"{len(nl)} new lead{'s'*(len(nl)!=1)} · {len(pc)} price cut{'s'*(len(pc)!=1)} "
               f"· {len(nr)} needs review")
 
-    if not nl and not pipe_ch and not mkt_ch and not nr:
+    if not nl and not pipe_ch and not mkt_ch and not aged and not nr:
         return (f'<div style="font-family:system-ui,Arial">'
                 f'<h2>RTP Deal Briefing</h2><p>No new deals or changes today.</p></div>'), header
 
@@ -146,6 +149,12 @@ def render_html(data, since):
     if data["enrich_n"]:
         parts.append(f'<div style="color:#999;font-size:12px;margin-top:4px">'
                      f'+ {data["enrich_n"]} field enrichment(s) across deals</div>')
+
+    if aged:
+        names = ", ".join(f"{a[0]}, {a[1]}" for a in aged)
+        parts.append(f'<div style="color:#999;font-size:12px;margin-top:14px">'
+                     f'<b style="color:#777">AGED OUT ({len(aged)})</b> — leads gone quiet past '
+                     f'the active window, now comps: {names}</div>')
 
     if nr:
         parts.append('<h3 style="font-size:14px;color:#444;margin:20px 0 6px">'

@@ -33,8 +33,8 @@ def main():
         print(f"subject: {res['subject']}")
         print(f"  new leads: {len(d['new_leads'])}, price cuts: {len(d['price_cuts'])}, "
               f"pipeline changes: {len(d['pipeline_changes'])}, "
-              f"market moves: {len(d['market_changes'])}, enrichments: {d['enrich_n']}, "
-              f"needs_review: {len(d['needs_review'])}")
+              f"market moves: {len(d['market_changes'])}, aged out: {len(d['aged_out'])}, "
+              f"enrichments: {d['enrich_n']}, needs_review: {len(d['needs_review'])}")
         if send:
             print(f"SENT to {to or 'DISPATCH_EMAIL'} (id={res['sent_id']}); last_briefed_at advanced.")
         else:
