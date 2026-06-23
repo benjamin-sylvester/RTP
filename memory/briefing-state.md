@@ -29,9 +29,15 @@ on every dedup-enrich match (re-seen deals stay active). `ingest/freshness.sweep
 lead -> 'stale' where last_seen_at older than buy_box.yaml `pipeline.active_lead_days` (45); leaves
 underwriting/under_contract; logs the status change. 'stale' stays in the DB as a comp (v_pipeline /
 v_pipeline_deals already exclude it). `scripts/sweep.py` (--commit, or `--reactivate ID` to bring a
-stale deal back to lead). The DAILY job order is: sweep THEN briefing. Sweep on current backfill
-demoted 0 (all seen today); 13 leads still active. Demotion logic proven in rollback (60d lead->stale,
-90d underwriting untouched).
+stale deal back to lead). The DAILY job order is: sweep THEN briefing.
+
+CAVEAT FIXED: migration 005's backfill set last_seen_at to today (ingest/history all happened during
+the backfill), so nothing aged out. `scripts/backfill_last_seen.py` corrects it to each deal's TRUE
+source date = most recent Gmail internalDate across its raw_email_id thread AND any digest carrying
+its external_id/MLS#, then listing_date, then date_ingested (70 gmail / 2 listing_date). After that,
+sweep (active_lead_days 45, cutoff ~May 8) demoted 5 leads -> stale (4 Candor Manchester last seen
+2026-03-24, 9 Carroll Pittsfield 2026-04-02); 7 listing-leads + package = 8 active. NOTE: packages
+aren't swept (no last_seen_at on packages table) — pkg #1 stays active regardless.
 
 NEXT (gated): Ben checks the inbox copy, THEN schedule the daily 6:30am job = sweep + briefing
 (alongside the 15-min ingestion cron). NOT scheduled yet. See [[phase3-state]].
