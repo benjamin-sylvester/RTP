@@ -179,6 +179,10 @@ def render_html(data, since):
                          f'<span style="color:#999">— {reason or ""}</span></li>')
         parts.append('</ul>')
 
+    parts.append(
+        '<div style="color:#aaa;font-size:12px;margin-top:22px;border-top:1px solid #eee;'
+        'padding-top:10px">Prune from your phone: <b>reply</b> to this email with '
+        '<b>kill</b> + the ids (e.g. <code>kill 24, 25</code>) to drop those deals.</div>')
     parts.append('</div>')
     return "\n".join(parts), header
 

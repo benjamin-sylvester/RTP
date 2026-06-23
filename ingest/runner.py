@@ -47,6 +47,13 @@ def run_once(commit=True, after=AFTER_FLOOR, do_label=True, log=print):
     log(f"[ingest] {len(ids)} unprocessed message(s) after {after}")
     conn = _connect()
     try:
+        # reply-to-kill: process any "kill 24, 25" replies to the briefing first
+        if commit:
+            try:
+                from ingest import reply_commands
+                reply_commands.process_replies(svc, conn, log=log)
+            except Exception as e:
+                log(f"[reply-cmd] error: {e}")
         for mid in ids:
             msg = gc.get_message(svc, mid)
             bkey, path, cands = pipeline.extract_candidates(svc, msg, session)

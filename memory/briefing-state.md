@@ -44,5 +44,14 @@ recomputes it and demotes stale 'lead' packages too. Package #1 (377-383 Manches
 received April) -> exempt, stays in pipeline. Briefing now splits lead->stale demotions into their
 own "AGED OUT (N)" line (not under MARKET MOVES, which is comps only).
 
+BRIEFING UX (Jun 22): each deal shows its id; addresses link to Google Maps; AI summaries are now
+<=3 ultra-terse bullets (ingest/summarize.py), BLANK when nothing notable (bare-MLS deals empty).
+Manual prune: `scripts/deal.py --kill ID [reason]` (-> 'dead'), `--reactivate ID`, `--list`
+(freshness.kill/reactivate). REPLY-TO-KILL: reply to a briefing with "kill 24, 25" -> ingestion job
+(runner.run_once calls ingest/reply_commands.process_replies) parses ONLY the typed reply (above the
+quoted original, so quoted/example ids are ignored), sets those listings dead, labels the reply
+RTP/CmdProcessed so it runs once. Briefing has a footer explaining it. Corrected copy re-sent to
+ben@rtprei.com (msg 19ef6c156bed9b2d). Still NOT scheduled.
+
 NEXT (gated): Ben checks the inbox copy, THEN schedule the daily 6:30am job = sweep + briefing
 (alongside the 15-min ingestion cron). NOT scheduled yet. See [[phase3-state]].
