@@ -49,6 +49,19 @@ scoring_weights:
   unit_count_sweet_spot: 0.10   # peak at 12-20 units
   days_on_market: 0.10
 
+# Coarse triage tiers from the 0-100 score (in-box deals only; out-of-box -> Pass).
+# Tier is a sort bucket, never a reject. Read by the scorer; never hardcode.
+tiers:
+  priority_min: 65
+  watch_min: 40
+
+# Triage tier cutoffs on the composite score. Read by the underwriter, never hardcoded.
+# Calibrated to the empirical gap between Ben's hand-No deals (top out ~30) and his
+# hand-YES deals (start ~42). watch_min sits in that gap so every YES lands >= Watch.
+tiers:
+  priority_min: 65
+  watch_min: 40
+
 # Underwriting assumptions for the quick screen
 assumptions:
   expense_ratio_default: 0.475   # 45-50%, refine as data accumulates

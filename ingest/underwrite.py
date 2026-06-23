@@ -15,8 +15,7 @@ from ingest import routing
 
 MARKET_SOURCES = ("hud", "zillow", "costar")  # market-asking; NEVER 'rent_roll'
 
-PRIORITY_MIN = 65   # tier cutoffs (calibrated in step 5)
-WATCH_MIN = 45
+# Tier cutoffs live in buy_box.yaml (tiers.priority_min / watch_min); never hardcode.
 # Out-of-box deals are comps, not pipeline priorities — gate their triage score so a
 # well-penciling out-of-geography deal still sinks below in-box leads. (Never a reject;
 # they remain in the DB as comps and keep their full component breakdown.)
@@ -371,14 +370,13 @@ def compute(conn, deal):
     else:
         confidence = "low"
 
-    # tier — never discards; out-of-box or weak just sinks in the queue
-    if score is None:
+    # tier — never discards; out-of-box or weak just sinks in the queue. Cutoffs from buy_box.yaml.
+    T = bb["tiers"]
+    if score is None or not meets:
         tier = "Pass"
-    elif not meets:
-        tier = "Pass"
-    elif score >= PRIORITY_MIN:
+    elif score >= T["priority_min"]:
         tier = "Priority"
-    elif score >= WATCH_MIN:
+    elif score >= T["watch_min"]:
         tier = "Watch"
     else:
         tier = "Pass"

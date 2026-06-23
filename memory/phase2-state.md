@@ -16,7 +16,8 @@ All assumptions/weights/rate read from `buy_box.yaml` (interest_rate 0.0625). re
 available components (cap-current, PPU-vs-market, DSCR, unit sweet-spot, DOM). Every au row stores an
 explainable `buy_box_flags._score_breakdown` (weight→contribution→detail), `_not_assessed`, and
 `_component_score` (pre-gate). Out-of-box deals get score ×0.3 (`OUT_OF_BOX_SCORE_FACTOR`) so comps
-sink below leads — never discarded. Tier cutoffs Priority≥65, Watch≥45. score_confidence: medium if a
+sink below leads — never discarded. Tier cutoffs live in buy_box.yaml `tiers` (priority_min 65,
+watch_min 40), read by the scorer — never hardcoded. score_confidence: medium if a
 real NOI figure exists, low if estimated-from-GSI / broker-claim / no financials (never high until
 rent comps). `ingest/summarize.py` AI summary READS source email/OM text (Gmail thread_text, HTML
 fallback) for qualitative signals.
