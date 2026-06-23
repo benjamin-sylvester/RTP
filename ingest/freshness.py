@@ -38,14 +38,27 @@ def sweep(conn):
     return out
 
 
+def kill(conn, listing_id, reason=None):
+    """Manually reject a deal you've reviewed and don't like (-> status 'dead').
+    Drops out of the pipeline + briefing; stays in the DB as a comp. Logs the change."""
+    old = conn.execute("SELECT status FROM listings WHERE id=%s", (listing_id,)).fetchone()
+    if not old or old[0] == "dead":
+        return None
+    conn.execute("UPDATE listings SET status='dead' WHERE id=%s", (listing_id,))
+    conn.execute("INSERT INTO listing_history (listing_id, field, old_value, new_value) "
+                 "VALUES (%s, 'status', %s, 'dead')", (listing_id, old[0]))
+    if reason:
+        conn.execute("UPDATE listings SET notes = COALESCE(notes,'') || %s WHERE id=%s",
+                     (f" [killed: {reason}]", listing_id))
+    return conn.execute("SELECT id, address, city FROM listings WHERE id=%s", (listing_id,)).fetchone()
+
+
 def reactivate(conn, listing_id):
-    """Manually bring a stale deal back into the pipeline (stale -> lead, refresh seen)."""
-    row = conn.execute(
-        "UPDATE listings SET status='lead', last_seen_at=NOW() "
-        "WHERE id=%s AND status='stale' RETURNING id, address, city", (listing_id,)
-    ).fetchone()
-    if row:
-        conn.execute(
-            "INSERT INTO listing_history (listing_id, field, old_value, new_value) "
-            "VALUES (%s, 'status', 'stale', 'lead')", (listing_id,))
-    return row
+    """Bring a stale OR killed deal back into the pipeline (-> lead, refresh seen)."""
+    old = conn.execute("SELECT status FROM listings WHERE id=%s", (listing_id,)).fetchone()
+    if not old or old[0] not in ("stale", "dead"):
+        return None
+    conn.execute("UPDATE listings SET status='lead', last_seen_at=NOW() WHERE id=%s", (listing_id,))
+    conn.execute("INSERT INTO listing_history (listing_id, field, old_value, new_value) "
+                 "VALUES (%s, 'status', %s, 'lead')", (listing_id, old[0]))
+    return conn.execute("SELECT id, address, city FROM listings WHERE id=%s", (listing_id,)).fetchone()

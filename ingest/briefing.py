@@ -81,21 +81,35 @@ def gather(conn, since):
             "enrich_n": enrich_n, "needs_review": needs_review}
 
 
+def _maps_link(name, market, state):
+    from urllib.parse import quote_plus
+    q = name if (name and name.lower() not in ("unknown", "?")) else ""
+    query = quote_plus(f"{q} {market or ''} {state or ''}".strip())
+    label = f"{name or '?'}, {market} {state}"
+    return (f'<a href="https://www.google.com/maps/search/?api=1&query={query}" '
+            f'style="color:#111;text-decoration:none;border-bottom:1px dotted #999">{label}</a>')
+
+
 def _lead_card(r):
     kind, did, name, market, state, units, ask, score, tier, conf, summary, thread = r
     ppu = _usd(ask / units) if (ask and units) else "n/a"
     color = {"Priority": "#0b7", "Watch": "#e90", "Pass": "#999"}.get(tier, "#999")
-    link = (f'<a href="{GMAIL_THREAD}{thread}" style="color:#36c;text-decoration:none">email ↗</a>'
+    idtag = f"pkg {did}" if kind == "package" else f"id {did}"
+    link = (f' · <a href="{GMAIL_THREAD}{thread}" style="color:#36c;text-decoration:none">email ↗</a>'
             if thread else "")
+    bullets = [b for b in (summary or "").splitlines() if b.strip()]
+    bullets_html = ("<ul style=\"margin:6px 0 0;padding-left:18px;color:#333;font-size:13px;"
+                    "line-height:1.5\">" + "".join(f"<li>{b}</li>" for b in bullets) + "</ul>"
+                    ) if bullets else ""
     return f"""
     <tr><td style="padding:12px 14px;border-bottom:1px solid #eee">
       <span style="background:{color};color:#fff;font-size:11px;font-weight:700;
         padding:2px 8px;border-radius:10px">{tier}</span>
-      <span style="font-weight:600;font-size:15px;color:#111;margin-left:6px">{name or '?'}, {market} {state}</span>
+      <span style="font-weight:600;font-size:15px;margin-left:6px">{_maps_link(name, market, state)}</span>
       <span style="color:#888;font-size:12px;margin-left:8px">
-        {units or '?'} units · {_usd(ask)} · {ppu}/unit · {link}</span>
-      <div style="color:#333;font-size:13px;line-height:1.45;margin-top:6px">{short_summary(summary)}</div>
-      <div style="color:#aaa;font-size:11px;margin-top:4px">confidence: {conf or '?'} · score {score if score is not None else '–'}/100</div>
+        {units or '?'} units · {_usd(ask)} · {ppu}/unit{link}</span>
+      {bullets_html}
+      <div style="color:#bbb;font-size:11px;margin-top:5px">{idtag} · {conf or '?'} conf · score {score if score is not None else '–'}</div>
     </td></tr>"""
 
 

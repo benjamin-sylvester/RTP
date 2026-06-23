@@ -9,18 +9,16 @@ import re
 from ingest import gmail_client as gc
 from ingest.parsers import _client, html_to_text
 
-SYSTEM = ("You are a multifamily acquisitions analyst writing a 2-3 sentence triage "
-          "note for an experienced investor. Read the broker's own words. Surface the "
-          "qualitative signals numbers miss — condition, deferred maintenance, seller "
-          "motivation (retiring, price cuts), below-market rents, unit mix, parking, "
-          "location quality. Be specific and direct; no filler, no restating the price.")
+SYSTEM = ("You write ultra-terse triage bullets for a multifamily investor scanning "
+          "deals fast. Surface only what changes a decision — value-add upside, seller "
+          "motivation, condition/risk, below-market rents, real data gaps.")
 
-PROMPT = """Deal: {name}, {city} {state} — {units} units, ask {ask}.
-Computed quick-screen (context, don't just repeat): {metrics}
+PROMPT = """Deal: {name}, {city} {state} — {units} units, ask {ask}. Metrics: {metrics}.
 
-Source broker text / notes below. Write 2-3 sentences flagging the most decision-
-relevant qualitative signals (the human will still do a full BOE). If the text is
-thin, say what's missing.
+From the broker's own words below, output UP TO 3 ultra-terse bullets (max ~8 words
+each), most decision-relevant first. Telegraphic style, no full sentences, no bullet
+characters — one signal per line. If there is genuinely nothing notable to flag (e.g. a
+bare MLS notification with no real detail), output NOTHING AT ALL.
 
 SOURCE:
 \"\"\"
@@ -58,7 +56,7 @@ def _source_text(conn, svc, deal):
 def summarize(conn, svc, deal, au, model=None):
     src = _source_text(conn, svc, deal)
     if not src.strip():
-        return "No source text available for this deal yet (parsed fields only)."
+        return ""  # nothing to say -> leave blank
     model = model or os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
     ask = f"${deal['effective_ask_cents']/100:,.0f}" if deal.get("effective_ask_cents") else "n/a"
     metrics = []
@@ -71,10 +69,22 @@ def summarize(conn, svc, deal, au, model=None):
     metrics.append(f"score {au.get('score')}/{au.get('tier')}/{au.get('score_confidence')} conf")
 
     resp = _client().messages.create(
-        model=model, max_tokens=300, system=SYSTEM,
+        model=model, max_tokens=160, system=SYSTEM,
         messages=[{"role": "user", "content": PROMPT.format(
             name=deal["name"], city=deal["market"], state=deal["state"],
             units=deal["effective_units"], ask=ask,
             metrics=", ".join(metrics), src=src)}],
     )
-    return resp.content[0].text.strip()
+    raw = resp.content[0].text.strip()
+    # normalize to clean bullet lines; blank if the model had nothing to say
+    lines = []
+    for ln in raw.splitlines():
+        ln = ln.strip().lstrip("-•*").strip()
+        if ln and ln.lower() not in ("none", "nothing", "n/a", "(none)"):
+            lines.append(ln)
+    # a single "bare MLS notification / nothing to flag" line is filler -> blank
+    if len(lines) == 1 and re.search(
+            r"\b(bare|nothing to flag|no (?:property )?(?:details|data|info|commentary)|"
+            r"notification|no broker)\b", lines[0], re.I):
+        return ""
+    return "\n".join(lines[:3])
