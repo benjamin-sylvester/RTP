@@ -13,7 +13,8 @@ from googleapiclient.discovery import build
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 TOKEN_URI = "https://oauth2.googleapis.com/token"
-SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
+SCOPES = ["https://www.googleapis.com/auth/gmail.modify",
+          "https://www.googleapis.com/auth/gmail.send"]
 
 
 def _load_env():
@@ -154,6 +155,20 @@ def thread_text(svc, thread_id, max_chars=6000):
                 if p.get("mimeType") == "text/html" and b.get("data"):
                     parts.append(re.sub(r"<[^>]+>", " ", _decode(b["data"])))
     return re.sub(r"[ \t]+", " ", "\n".join(parts))[:max_chars]
+
+
+def send_html(svc, to, subject, html, text_alt=None):
+    """Send an HTML email via the Gmail API (needs gmail.send scope). Returns message id."""
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    msg = MIMEMultipart("alternative")
+    msg["To"] = to
+    msg["Subject"] = subject
+    msg.attach(MIMEText(text_alt or "See HTML version.", "plain"))
+    msg.attach(MIMEText(html, "html"))
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+    sent = svc.users().messages().send(userId="me", body={"raw": raw}).execute()
+    return sent["id"]
 
 
 def download_attachment(svc, msg_id, attachment_id):

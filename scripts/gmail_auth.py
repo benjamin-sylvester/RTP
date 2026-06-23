@@ -23,7 +23,8 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SECRET = ROOT / "client_secret.json"
 ENV = ROOT / ".env"
-SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
+SCOPES = ["https://www.googleapis.com/auth/gmail.modify",
+          "https://www.googleapis.com/auth/gmail.send"]
 
 
 def upsert_env(updates: dict):

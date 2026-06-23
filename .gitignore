@@ -38,6 +38,9 @@ client_secret*.json
 gmail_token.json
 token.json
 
+# Generated briefing preview
+briefing_preview.html
+
 # IDE
 .vscode/
 .idea/
