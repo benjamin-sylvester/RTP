@@ -36,9 +36,13 @@ geography:
     - name: "Strafford County"
       markets: [Dover, Rochester, Somersworth, Farmington, Milton]
 
-# Scoring weights for the composite 0-100 score (auto_underwriting.score)
+# Scoring weights for the composite 0-100 score (auto_underwriting.score). Sum = 1.00.
 scoring_weights:
-  cap_rate_stabilized: 0.25
+  cap_rate_stabilized: 0.15      # value-add return at market rents (primary cap lens)
+  cap_rate_current: 0.10         # current cash flow. MUST be computed on a normalized expense
+                                 # ratio (expense_ratio_default) or VERIFIED actuals (real T-12/
+                                 # rent roll) — NEVER the broker's headline NOI. This keeps a
+                                 # rosy broker expense ratio from inflating the score (the Nashua trap).
   price_per_unit_vs_market: 0.20
   rent_upside_pct: 0.20
   dscr: 0.15

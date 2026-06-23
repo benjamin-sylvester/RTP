@@ -9,8 +9,11 @@ rent_comps is empty (Phase 3), so stabilized cap / rent upside / IRR are left nu
 and excluded; weights renormalize over the components actually available.
 """
 import json
+import re
 
 from ingest import routing
+
+MARKET_SOURCES = ("hud", "zillow", "costar")  # market-asking; NEVER 'rent_roll'
 
 PRIORITY_MIN = 65   # tier cutoffs (calibrated in step 5)
 WATCH_MIN = 45
@@ -60,27 +63,160 @@ def dom_score(dom):           # longer on market = more negotiating leverage (mi
     return _clamp(dom / 120.0)
 
 
+def rent_upside_score(pct):   # 0% -> 0, 40%+ below-market upside -> 1
+    return _clamp(pct / 0.40)
+
+
+def beds_from_type(s):
+    if not s:
+        return None
+    if "studio" in s.lower():
+        return 0
+    m = re.search(r"\d+", s)
+    return int(m.group()) if m else None
+
+
+def market_rent(conn, market, beds):
+    """Median market-source (hud/zillow/costar) rent for a market + bedroom count."""
+    if beds is None:
+        return None
+    r = conn.execute(
+        f"SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY rent) FROM rent_comps "
+        f"WHERE source = ANY(%s) AND lower(market)=lower(%s) AND beds=%s",
+        (list(MARKET_SOURCES), market, beds)).fetchone()
+    return float(r[0]) if r and r[0] is not None else None
+
+
+def resolve_unit_mix(conn, deal):
+    """Return ({beds: count}, source) from unit_mix table, then rent-roll comps,
+    then the raw_data unit_mix string. None if undeterminable."""
+    if deal["deal_kind"] != "listing":
+        return None, None
+    lid = deal["deal_id"]
+    mix = {}
+    for ut, cnt in conn.execute(
+            "SELECT unit_type, count FROM unit_mix WHERE listing_id=%s", (lid,)).fetchall():
+        b = beds_from_type(ut)
+        if b is not None and cnt:
+            mix[b] = mix.get(b, 0) + cnt
+    if mix:
+        return mix, "unit_mix"
+    rr = conn.execute(
+        "SELECT beds, count(*) FROM rent_comps WHERE source_listing_id=%s AND "
+        "source='rent_roll' AND beds IS NOT NULL GROUP BY beds", (lid,)).fetchall()
+    if rr:
+        mix = {b: c for b, c in rr}
+        units = deal.get("effective_units")
+        if units and len(mix) == 1 and sum(mix.values()) < units:
+            mix[next(iter(mix))] = units  # all one type; fill vacants to total
+        return mix, "rent_roll"
+    raw = conn.execute("SELECT raw_data->>'unit_mix' FROM listings WHERE id=%s",
+                       (lid,)).fetchone()
+    if raw and raw[0]:
+        for cnt, beds in re.findall(r"(\d+)\s*x\s*(\d+)\s*BR", raw[0], re.I):
+            mix[int(beds)] = mix.get(int(beds), 0) + int(cnt)
+        if mix:
+            return mix, "raw_unit_mix"
+    return None, None
+
+
+def in_place(conn, deal, units):
+    """Return (annual_gross_dollars, unit_count) for in-place rent, or (None, None).
+    Sources: rent-roll comps (occupied), then raw_data GSI, then financials GSR."""
+    if deal["deal_kind"] == "listing":
+        rr = conn.execute(
+            "SELECT sum(rent), count(*) FROM rent_comps WHERE source_listing_id=%s "
+            "AND source='rent_roll'", (deal["deal_id"],)).fetchone()
+        if rr and rr[0]:
+            return float(rr[0]) * 12, rr[1]
+        g = conn.execute("SELECT raw_data->>'in_place_gsi' FROM listings WHERE id=%s",
+                         (deal["deal_id"],)).fetchone()
+        if g and g[0]:
+            return float(g[0]), units
+    return None, None
+
+
+def irr_5yr(equity, annual_cf, net_sale):
+    """Rough 5-yr levered IRR via bisection over [-equity, cf, cf, cf, cf, cf+sale]."""
+    flows = [-equity, annual_cf, annual_cf, annual_cf, annual_cf, annual_cf + net_sale]
+    def npv(r):
+        return sum(f / (1 + r) ** i for i, f in enumerate(flows))
+    lo, hi = -0.9, 2.0
+    if npv(lo) * npv(hi) > 0:
+        return None
+    for _ in range(80):
+        mid = (lo + hi) / 2
+        if npv(mid) > 0:
+            lo = mid
+        else:
+            hi = mid
+    return round((lo + hi) / 2, 4)
+
+
+def stabilized_block(conn, deal, units, ask, A):
+    """Compute (cap_stabilized, rent_upside_pct, irr_5yr, detail) from MARKET rents +
+    resolved unit mix. Returns all-None if mix or market rents unavailable."""
+    mix, mix_src = resolve_unit_mix(conn, deal)
+    if not (mix and ask and units):
+        return None, None, None, None, None
+    mrents = {b: market_rent(conn, deal["market"], b) for b in mix}
+    if not all(mrents[b] for b in mix):
+        return None, None, None, None, None
+    covered = sum(mix.values())
+    gsr = sum(mix[b] * mrents[b] * 12 for b in mix)
+    if covered < units:                       # fill remaining units at the mix avg
+        gsr += (gsr / covered) * (units - covered)
+    stab_noi = gsr * A["stabilized_occupancy"] * (1 - A["expense_ratio_default"])
+    cap_stab = stab_noi / ask
+
+    upside = None
+    ip_gross, ip_units = in_place(conn, deal, units)
+    if ip_gross and ip_units:
+        mkt_pu = gsr / units
+        ip_pu = ip_gross / ip_units
+        if ip_pu > 0:
+            upside = (mkt_pu - ip_pu) / ip_pu
+
+    # rough 5-yr IRR
+    loan = ask * A["ltv"]
+    equity = ask - loan + A["reno_per_unit_usd"] * units
+    ads = mortgage_payment(loan, A["interest_rate"], A["amortization_years"]) * 12
+    annual_cf = stab_noi - ads
+    exit_cap = max(0.04, cap_stab - A["exit_cap_compression_bps"] / 10000)
+    net_sale = stab_noi / exit_cap - loan
+    irr = irr_5yr(equity, annual_cf, net_sale)
+
+    detail = (f"stab cap {cap_stab*100:.1f}% on market rents ({mix_src} mix), "
+              + (f"upside {upside*100:+.0f}%" if upside is not None else "upside n/a"))
+    return cap_stab, upside, irr, detail, mix_src
+
+
 # ---------- financials ----------
 def deal_financials(conn, deal_kind, deal_id):
-    """Return (noi_usd, noi_is_estimated, gsi_usd) for a listing or package."""
+    """Return (in_place_gsi_usd, verified_noi_usd).
+    verified_noi is set ONLY from a real T-12 (data_source 't12') — a broker's
+    headline NOI is NEVER returned, so it can't inflate the current cap (the Nashua
+    trap). GSI prefers rent-roll-verified in-place income, then broker GSR, then raw."""
     if deal_kind == "package":
         row = conn.execute(
-            "SELECT SUM(lf.noi), SUM(lf.gross_revenue) FROM listing_financials lf "
+            "SELECT SUM(lf.gross_revenue) FROM listing_financials lf "
             "JOIN listings l ON l.id=lf.listing_id WHERE l.package_id=%s", (deal_id,)
         ).fetchone()
-        raw_gsi = None
-    else:
-        row = conn.execute(
-            "SELECT noi, gross_revenue FROM listing_financials WHERE listing_id=%s",
-            (deal_id,)).fetchone()
-        rg = conn.execute(
-            "SELECT raw_data->>'in_place_gsi' FROM listings WHERE id=%s", (deal_id,)
-        ).fetchone()
-        raw_gsi = float(rg[0]) if rg and rg[0] else None
-    noi_c, gsi_c = (row or (None, None))
-    noi = float(noi_c) / 100 if noi_c is not None else None
-    gsi = float(gsi_c) / 100 if gsi_c is not None else raw_gsi
-    return noi, gsi
+        gsi = float(row[0]) / 100 if row and row[0] is not None else None
+        return gsi, None
+    rr = conn.execute(
+        "SELECT sum(rent) FROM rent_comps WHERE source_listing_id=%s AND source='rent_roll'",
+        (deal_id,)).fetchone()
+    rr_gsi = float(rr[0]) * 12 if rr and rr[0] else None
+    lf = conn.execute(
+        "SELECT gross_revenue, noi, data_source FROM listing_financials WHERE listing_id=%s",
+        (deal_id,)).fetchone()
+    lf_gsi = float(lf[0]) / 100 if lf and lf[0] is not None else None
+    verified_noi = float(lf[1]) / 100 if (lf and lf[1] is not None and lf[2] == "t12") else None
+    rg = conn.execute("SELECT raw_data->>'in_place_gsi' FROM listings WHERE id=%s",
+                      (deal_id,)).fetchone()
+    raw_gsi = float(rg[0]) if rg and rg[0] else None
+    return (rr_gsi or lf_gsi or raw_gsi), verified_noi
 
 
 def city_median_ppu(conn, city, exclude_id):
@@ -131,24 +267,41 @@ def compute(conn, deal):
     meets, flags = buy_box_flags(deal["state"], city, units, ask,
                                  deal.get("year_built"), deal.get("property_class"))
 
-    noi, gsi = deal_financials(conn, deal["deal_kind"], deal["deal_id"])
-    noi_estimated = False
-    if noi is None and gsi is not None:
-        noi = gsi * (1 - A["expense_ratio_default"])
-        noi_estimated = True
+    gsi, verified_noi = deal_financials(conn, deal["deal_kind"], deal["deal_id"])
+    # Normalized NOI for current cap + DSCR: verified T-12 actuals, else GSI x default
+    # expense ratio. NEVER the broker's headline NOI (keeps a rosy expense ratio from
+    # inflating the score — the Nashua trap).
+    if verified_noi is not None:
+        noi_norm, noi_basis = verified_noi, "T-12 verified"
+    elif gsi is not None:
+        noi_norm, noi_basis = gsi * (1 - A["expense_ratio_default"]), "normalized expense ratio"
+    else:
+        noi_norm, noi_basis = None, None
 
     metrics, components, unassessed = {}, {}, []
 
-    # implied cap (current). Stabilized excluded (no rent_comps) -> degrade to current.
-    cap_cur = (noi / ask) if (noi and ask) else None
+    cap_cur = (noi_norm / ask) if (noi_norm and ask) else None
     metrics["implied_cap_current"] = cap_cur
-    if cap_cur is not None:
-        components["cap"] = (W["cap_rate_stabilized"], cap_score(cap_cur),
-                             f"current cap {cap_cur*100:.1f}%"
-                             + (" (NOI est. from GSI)" if noi_estimated else ""))
+    # Phase 3: stabilized cap + rent upside from MARKET rents (hud/zillow), if mix known.
+    cap_stab, rent_upside, irr, stab_detail, mix_src = stabilized_block(conn, deal, units, ask, A)
+
+    # Two independent cap components (weights from buy_box.yaml): stabilized = value-add
+    # return at market rents; current = normalized cash flow today.
+    if cap_stab is not None:
+        components["cap_stabilized"] = (W["cap_rate_stabilized"], cap_score(cap_stab), stab_detail)
     else:
-        unassessed.append("cap (no NOI/GSI)")
-    unassessed.append("cap_rate_stabilized + rent_upside (no rent_comps yet)")
+        unassessed.append("stabilized cap (need market rents + unit mix)")
+    if cap_cur is not None:
+        components["cap_current"] = (W["cap_rate_current"], cap_score(cap_cur),
+                                     f"current cap {cap_cur*100:.1f}% ({noi_basis})")
+    else:
+        unassessed.append("current cap (no in-place income)")
+
+    if rent_upside is not None:
+        components["rent_upside"] = (W["rent_upside_pct"], rent_upside_score(rent_upside),
+                                     f"rent upside {rent_upside*100:+.0f}% (market vs in-place)")
+    else:
+        unassessed.append("rent_upside (need market rents + in-place)")
 
     # PPU vs market
     ppu_vs = None
@@ -164,19 +317,19 @@ def compute(conn, deal):
         else:
             unassessed.append(f"PPU-vs-market (<2 comps in {city})")
 
-    # DSCR
+    # DSCR — on the SAME normalized NOI (never the broker's headline NOI)
     dscr = None
-    if noi and ask:
+    if noi_norm and ask:
         loan = ask * A["ltv"]
         ads = mortgage_payment(loan, A["interest_rate"], A["amortization_years"]) * 12
-        dscr = noi / ads if ads else None
+        dscr = noi_norm / ads if ads else None
         metrics["estimated_dscr"] = dscr
         components["dscr"] = (W["dscr"], dscr_score(dscr),
                               f"DSCR {dscr:.2f} @ {A['interest_rate']*100:.2f}% "
-                              f"(floor {A['dscr_floor']})")
+                              f"(floor {A['dscr_floor']}, {noi_basis})")
         flags["dscr_below_floor"] = dscr < A["dscr_floor"]
     else:
-        unassessed.append("DSCR (no NOI)")
+        unassessed.append("DSCR (no in-place income)")
 
     # unit sweet spot
     us = units_score(units)
@@ -207,13 +360,16 @@ def compute(conn, deal):
                      "detail": d}
                  for k, (w, s, d) in components.items()}
 
-    # confidence: high needs real NOI + rent comps (impossible now); estimated NOI -> low
-    if noi is None:
-        confidence = "low"
-    elif noi_estimated:
-        confidence = "low"      # leans on estimated expense ratio
+    # confidence: high = VERIFIED NOI (T-12) + market rents; medium = one; low = neither.
+    # A broker's headline NOI is never "verified", so it can't earn high confidence.
+    has_market = cap_stab is not None
+    verified = verified_noi is not None
+    if verified and has_market:
+        confidence = "high"
+    elif verified or has_market:
+        confidence = "medium"
     else:
-        confidence = "medium"   # real NOI figure but no rent comps -> not high
+        confidence = "low"
 
     # tier — never discards; out-of-box or weak just sinks in the queue
     if score is None:
@@ -238,11 +394,11 @@ def compute(conn, deal):
         "meets_buy_box": meets,
         "buy_box_flags": flags,
         "implied_cap_current": cap_cur,
-        "implied_cap_stabilized": None,
+        "implied_cap_stabilized": cap_stab,
         "price_per_unit_vs_market": ppu_vs,
-        "rent_upside_pct": None,
+        "rent_upside_pct": rent_upside,
         "estimated_dscr": dscr,
-        "estimated_irr_5yr": None,
+        "estimated_irr_5yr": irr,
         "score": score,
         "score_confidence": confidence,
         "tier": tier,
