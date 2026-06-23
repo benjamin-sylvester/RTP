@@ -134,6 +134,28 @@ def get_message(svc, msg_id):
     }
 
 
+def thread_text(svc, thread_id, max_chars=6000):
+    """Concatenated plain/stripped text of a thread's messages (for AI summary source)."""
+    try:
+        th = svc.users().threads().get(userId="me", id=thread_id, format="full").execute()
+    except Exception:
+        return ""
+    parts = []
+    for m in th.get("messages", []):
+        leaves = []
+        _walk_parts(m.get("payload", {}), leaves)
+        plain = [_decode(p["body"]["data"]) for p in leaves
+                 if p.get("mimeType") == "text/plain" and p.get("body", {}).get("data")]
+        if plain:
+            parts.extend(plain)
+        else:  # HTML-only email (e.g. MLS notifications): strip tags
+            for p in leaves:
+                b = p.get("body", {})
+                if p.get("mimeType") == "text/html" and b.get("data"):
+                    parts.append(re.sub(r"<[^>]+>", " ", _decode(b["data"])))
+    return re.sub(r"[ \t]+", " ", "\n".join(parts))[:max_chars]
+
+
 def download_attachment(svc, msg_id, attachment_id):
     """Return raw bytes for an attachment."""
     att = svc.users().messages().attachments().get(

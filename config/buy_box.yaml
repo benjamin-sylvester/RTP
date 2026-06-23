@@ -54,3 +54,7 @@ assumptions:
   stabilized_occupancy: 0.95
   exit_cap_compression_bps: 25
   dscr_floor: 1.20
+  interest_rate: 0.0625          # 30yr fixed for DSCR/debt sizing (Ben, Jun 22). Update quarterly.
+  # NOTE: stabilized cap + rent_upside depend on rent_comps (Phase 3, currently empty).
+  # Until then the scorer must degrade gracefully (compute current cap, PPU-vs-market, DSCR,
+  # unit sweet-spot, DOM) and renormalize weights over available components.
