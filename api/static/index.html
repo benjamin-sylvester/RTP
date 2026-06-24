@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RTP Deal Dashboard</title>
+<style>
+  :root{--ink:#1a1a1a;--mut:#777;--line:#e7e7e7;--bg:#fafafa;--pri:#0b7;--wat:#e90;--pas:#999}
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.4 system-ui,-apple-system,Segoe UI,Arial;color:var(--ink);background:var(--bg)}
+  header{display:flex;align-items:baseline;gap:12px;padding:14px 18px;background:#fff;border-bottom:1px solid var(--line)}
+  header h1{font-size:17px;margin:0}
+  header .meta{color:var(--mut);font-size:13px}
+  header .sp{flex:1}
+  header button{font-size:12px;color:var(--mut);background:none;border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer}
+  .filters{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:10px 18px;background:#fff;border-bottom:1px solid var(--line)}
+  .filters label{font-size:12px;color:var(--mut);display:flex;flex-direction:column;gap:2px}
+  .filters input,.filters select{font:13px system-ui;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:#fff}
+  .filters input[type=number]{width:64px}
+  .toggles{display:flex;gap:12px;align-items:center}
+  .toggles label{flex-direction:row;align-items:center;gap:4px;cursor:pointer}
+  table{width:100%;border-collapse:collapse;background:#fff}
+  th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{position:sticky;top:0;background:#fff;font-size:12px;color:var(--mut);cursor:pointer;user-select:none;font-weight:600}
+  th.sorted::after{content:" ▾";color:#bbb}
+  th.asc::after{content:" ▴"}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  tbody tr{cursor:pointer}
+  tbody tr:hover{background:#f5f9ff}
+  a.addr{color:var(--ink);text-decoration:none;border-bottom:1px dotted #bbb}
+  a.addr:hover{color:#0848c4}
+  .badge{font-size:11px;font-weight:700;color:#fff;padding:2px 8px;border-radius:10px}
+  .Priority{background:var(--pri)}.Watch{background:var(--wat)}.Pass{background:var(--pas)}
+  .stat{font-size:11px;color:#555;background:#eee;border-radius:10px;padding:2px 8px}
+  .stat.lead{background:#dff5ea;color:#067}.stat.underwriting{background:#e6efff;color:#249}
+  .stat.needs_review{background:#fff0d6;color:#a60}.stat.stale{background:#eee;color:#999}.stat.comp_only{background:#f3f3f3;color:#999}
+  .empty{padding:30px;color:var(--mut);text-align:center}
+  /* login */
+  #login{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#0006}
+  #login form{background:#fff;padding:26px;border-radius:12px;box-shadow:0 10px 40px #0003;display:flex;flex-direction:column;gap:10px;width:280px}
+  #login h2{margin:0 0 4px;font-size:16px}
+  #login input{padding:8px;border:1px solid var(--line);border-radius:7px;font-size:14px}
+  #login button{padding:8px;border:0;border-radius:7px;background:#0b7;color:#fff;font-weight:600;cursor:pointer}
+  #login .err{color:#c33;font-size:12px;min-height:14px}
+  #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;transition:.2s;pointer-events:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>RTP Deal Dashboard</h1>
+  <span class="meta" id="meta">loading…</span>
+  <span class="sp"></span>
+  <button onclick="logout()">log out</button>
+</header>
+
+<div class="filters">
+  <label>Tier
+    <select id="f-tier"><option value="">any</option><option>Priority</option><option>Watch</option><option>Pass</option></select></label>
+  <label>City <input id="f-city" placeholder="e.g. Manchester"></label>
+  <label>Units ≥ <input id="f-umin" type="number" min="0"></label>
+  <label>Units ≤ <input id="f-umax" type="number" min="0"></label>
+  <label>Score ≥ <input id="f-smin" type="number" min="0" max="100"></label>
+  <label>Status <input id="f-status" placeholder="override (comma list)"></label>
+  <div class="toggles">
+    <label><input type="checkbox" id="t-comps"> comps</label>
+    <label><input type="checkbox" id="t-stale"> stale</label>
+    <label><input type="checkbox" id="t-needs"> needs_review</label>
+  </div>
+</div>
+
+<table id="tbl">
+  <thead><tr id="head"></tr></thead>
+  <tbody id="body"></tbody>
+</table>
+<div class="empty" id="empty" style="display:none">No deals match these filters.</div>
+
+<div id="login"><form onsubmit="return doLogin(event)">
+  <h2>RTP Deal Dashboard</h2>
+  <input id="pw" type="password" placeholder="password" autofocus>
+  <button type="submit">Log in</button>
+  <div class="err" id="loginerr"></div>
+</form></div>
+<div id="toast"></div>
+
+<script>
+const COLS = [
+  {k:'name',  t:'Address', addr:true},
+  {k:'market',t:'City'},
+  {k:'effective_units', t:'Units', num:true},
+  {k:'effective_ask',   t:'Ask',   num:true, money:true},
+  {k:'price_per_unit',  t:'$/Unit',num:true, money:true},
+  {k:'tier',  t:'Tier', badge:true},
+  {k:'score', t:'Score', num:true},
+  {k:'score_confidence', t:'Conf'},
+  {k:'status', t:'Status', stat:true},
+  {k:'last_seen_at', t:'Last seen', date:true},
+];
+let DEALS = [], sortCol = null, sortDir = -1;   // null => server default order
+
+function money(c){ return c==null ? '—' : '$'+Math.round(c/100).toLocaleString(); }
+function dt(s){ return s ? s.slice(0,10) : '—'; }
+function mapsUrl(d){ const q = encodeURIComponent(`${(d.name&&d.name.toLowerCase()!=='unknown')?d.name:''} ${d.market||''} ${d.state||''}`.trim());
+  return `https://www.google.com/maps/search/?api=1&query=${q}`; }
+
+function qs(){
+  const p = new URLSearchParams();
+  const tier=val('f-tier'), city=val('f-city'), umin=val('f-umin'), umax=val('f-umax'),
+        smin=val('f-smin'), status=val('f-status');
+  if(tier) p.set('tier',tier); if(city) p.set('city',city);
+  if(umin) p.set('units_min',umin); if(umax) p.set('units_max',umax);
+  if(smin) p.set('score_min',smin); if(status) p.set('status',status);
+  if(chk('t-comps')) p.set('comps','true');
+  if(chk('t-stale')) p.set('stale','true');
+  if(chk('t-needs')) p.set('needs_review','true');
+  return p.toString();
+}
+const val=id=>document.getElementById(id).value.trim();
+const chk=id=>document.getElementById(id).checked;
+
+async function load(){
+  const r = await fetch('/api/deals?'+qs());
+  if(r.status===401){ showLogin(); return; }
+  hideLogin();
+  const d = await r.json();
+  DEALS = d.deals;
+  document.getElementById('meta').textContent =
+    `${d.count} deal${d.count!==1?'s':''} · ${d.filters.statuses.join(', ')}`;
+  render();
+}
+
+function render(){
+  let rows = DEALS.slice();
+  if(sortCol){
+    rows.sort((a,b)=>{ let x=a[sortCol], y=b[sortCol];
+      if(x==null) return 1; if(y==null) return -1;
+      if(typeof x==='string'){ x=x.toLowerCase(); y=(y||'').toLowerCase(); }
+      return (x<y?-1:x>y?1:0)*sortDir; });
+  }
+  const body=document.getElementById('body'); body.innerHTML='';
+  document.getElementById('empty').style.display = rows.length? 'none':'block';
+  for(const d of rows){
+    const tr=document.createElement('tr');
+    tr.onclick=()=>showDetail(d.deal_kind,d.deal_id);
+    tr.innerHTML = COLS.map(c=>{
+      let v=d[c.k];
+      if(c.addr) return `<td><a class="addr" href="${mapsUrl(d)}" target="_blank" onclick="event.stopPropagation()">${v||'—'}</a></td>`;
+      if(c.money) return `<td class="num">${money(v)}</td>`;
+      if(c.date) return `<td>${dt(v)}</td>`;
+      if(c.badge) return `<td>${v?`<span class="badge ${v}">${v}</span>`:'—'}</td>`;
+      if(c.stat) return `<td><span class="stat ${v}">${v}</span></td>`;
+      if(c.num) return `<td class="num">${v==null?'—':v}</td>`;
+      return `<td>${v==null?'—':v}</td>`;
+    }).join('');
+    body.appendChild(tr);
+  }
+}
+
+function buildHead(){
+  const h=document.getElementById('head'); h.innerHTML='';
+  COLS.forEach(c=>{
+    const th=document.createElement('th'); th.textContent=c.t; if(c.num) th.className='num';
+    th.onclick=()=>{ if(sortCol===c.k) sortDir*=-1; else {sortCol=c.k; sortDir=1;}
+      [...h.children].forEach(x=>x.classList.remove('sorted','asc'));
+      th.classList.add('sorted'); if(sortDir>0) th.classList.add('asc'); render(); };
+    h.appendChild(th);
+  });
+}
+
+function showDetail(kind,id){ toast(`Detail for ${kind} #${id} — coming in slice 4`); }
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.style.opacity=1;
+  clearTimeout(t._h); t._h=setTimeout(()=>t.style.opacity=0,1800); }
+
+function showLogin(){ document.getElementById('login').style.display='flex'; document.getElementById('pw').focus(); }
+function hideLogin(){ document.getElementById('login').style.display='none'; }
+async function doLogin(e){ e.preventDefault();
+  const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({password:document.getElementById('pw').value})});
+  if(r.ok){ document.getElementById('loginerr').textContent=''; load(); }
+  else document.getElementById('loginerr').textContent='Wrong password';
+  return false; }
+async function logout(){ await fetch('/api/logout',{method:'POST'}); showLogin(); }
+
+// wire filters (debounced) + initial load
+let deb; document.querySelectorAll('.filters input,.filters select').forEach(el=>{
+  el.addEventListener('input',()=>{ clearTimeout(deb); deb=setTimeout(load,250); }); });
+buildHead(); load();
+</script>
+</body>
+</html>

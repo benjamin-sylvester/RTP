@@ -44,3 +44,6 @@ briefing_preview.html
 # IDE
 .vscode/
 .idea/
+
+# Local preview launch config (machine-specific paths)
+.claude/launch.json

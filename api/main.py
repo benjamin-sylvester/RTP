@@ -2,9 +2,11 @@
 Reads v_deal_board (package-aware, scored) + the underlying tables. Money stays in
 cents; the frontend formats. No auth yet (slice 2), no frontend (slice 3+)."""
 import os
+import pathlib
 import secrets
 
 from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
+from fastapi.responses import FileResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from api import db
@@ -33,6 +35,14 @@ def login(request: Request, password: str = Body(..., embed=True)):
 def logout(request: Request):
     request.session.clear()
     return {"ok": True}
+
+
+_STATIC = pathlib.Path(__file__).parent / "static"
+
+
+@app.get("/")
+def index():
+    return FileResponse(_STATIC / "index.html")
 
 ACTIVE = ["lead", "underwriting", "under_contract"]
 SORTABLE = {  # whitelist -> column
