@@ -1,11 +1,38 @@
 """RTP dashboard API — slice 1: read endpoints (list-deals, deal-detail, comps).
 Reads v_deal_board (package-aware, scored) + the underlying tables. Money stays in
 cents; the frontend formats. No auth yet (slice 2), no frontend (slice 3+)."""
-from fastapi import FastAPI, HTTPException, Query
+import os
+import secrets
+
+from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
+from starlette.middleware.sessions import SessionMiddleware
 
 from api import db
+from api.auth import check_password, require_auth
+from ingest.gmail_client import _load_env
 
+_load_env()
 app = FastAPI(title="RTP Deal Dashboard API", version="0.1")
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.environ.get("DASHBOARD_SECRET_KEY") or secrets.token_hex(32),
+    same_site="lax",
+    https_only=os.environ.get("DASHBOARD_HTTPS", "").lower() in ("1", "true"),
+)
+
+
+@app.post("/api/login")
+def login(request: Request, password: str = Body(..., embed=True)):
+    if not check_password(password):
+        raise HTTPException(status_code=401, detail="wrong password")
+    request.session["authed"] = True
+    return {"ok": True}
+
+
+@app.post("/api/logout")
+def logout(request: Request):
+    request.session.clear()
+    return {"ok": True}
 
 ACTIVE = ["lead", "underwriting", "under_contract"]
 SORTABLE = {  # whitelist -> column
@@ -35,6 +62,7 @@ def list_deals(
     comps: bool = False, stale: bool = False, needs_review: bool = False,
     sort: str = "default", order: str = "desc",
     limit: int = 200, offset: int = 0,
+    _auth=Depends(require_auth),
 ):
     # status set: explicit param wins; else active + requested toggles
     if status:
@@ -77,7 +105,7 @@ def list_deals(
 
 
 @app.get("/api/deals/{kind}/{deal_id}")
-def deal_detail(kind: str, deal_id: int):
+def deal_detail(kind: str, deal_id: int, _auth=Depends(require_auth)):
     board = db.one("SELECT * FROM v_deal_board WHERE deal_kind=%s AND deal_id=%s",
                    (kind, deal_id))
     if not board:
@@ -115,7 +143,8 @@ def deal_detail(kind: str, deal_id: int):
 
 
 @app.get("/api/deals/{kind}/{deal_id}/comps")
-def deal_comps(kind: str, deal_id: int, radius_miles: float = 10, limit: int = 25):
+def deal_comps(kind: str, deal_id: int, radius_miles: float = 10, limit: int = 25,
+               _auth=Depends(require_auth)):
     board = db.one("SELECT * FROM v_deal_board WHERE deal_kind=%s AND deal_id=%s",
                    (kind, deal_id))
     if not board:

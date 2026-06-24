@@ -19,6 +19,7 @@ httplib2==0.31.2
 httptools==0.8.0
 httpx==0.28.1
 idna==3.18
+itsdangerous==2.2.0
 lxml==6.1.1
 numpy==2.5.0
 oauthlib==3.3.1
