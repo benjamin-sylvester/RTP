@@ -32,7 +32,14 @@
   .Priority{background:var(--pri)}.Watch{background:var(--wat)}.Pass{background:var(--pas)}
   .stat{font-size:11px;color:#555;background:#eee;border-radius:10px;padding:2px 8px}
   .stat.lead{background:#dff5ea;color:#067}.stat.underwriting{background:#e6efff;color:#249}
-  .stat.needs_review{background:#fff0d6;color:#a60}.stat.stale{background:#eee;color:#999}.stat.comp_only{background:#f3f3f3;color:#999}
+  .stat.loi_sent{background:#ece0ff;color:#639}.stat.under_contract{background:#d6f0df;color:#075}
+  .stat.lost{background:#fde3e3;color:#a33}.stat.passed{background:#eee;color:#999}
+  .stat.needs_review{background:#fff0d6;color:#a60}.stat.comp_only{background:#f3f3f3;color:#999}
+  .actions{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 16px}
+  .actions button{font-size:12px;padding:5px 11px;border:1px solid var(--line);border-radius:7px;background:#fff;cursor:pointer}
+  .actions button:hover{background:#eef4ff;border-color:#bcd}
+  .actions button.danger:hover{background:#fde8e8;border-color:#e9b}
+  .actions button.ok{color:#067;font-weight:600}
   .empty{padding:30px;color:var(--mut);text-align:center}
   /* login */
   #login{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#0006}
@@ -42,6 +49,33 @@
   #login button{padding:8px;border:0;border-radius:7px;background:#0b7;color:#fff;font-weight:600;cursor:pointer}
   #login .err{color:#c33;font-size:12px;min-height:14px}
   #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;transition:.2s;pointer-events:none}
+  /* detail */
+  #detail{max-width:1000px;margin:0 auto;padding:18px}
+  #detail .back{display:inline-block;margin-bottom:12px;color:#0848c4;text-decoration:none;font-size:13px;cursor:pointer}
+  #detail .dhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:2px}
+  #detail .dhead h2{margin:0;font-size:20px}
+  #detail .dsub{color:var(--mut);font-size:14px;margin-bottom:16px}
+  #detail .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){#detail .grid{grid-template-columns:1fr}}
+  .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .card h3{margin:0 0 10px;font-size:13px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+  .card.wide{grid-column:1/-1}
+  .kv{display:flex;justify-content:space-between;gap:10px;padding:3px 0;font-size:13px;border-bottom:1px solid #f3f3f3}
+  .kv:last-child{border-bottom:0}
+  .kv .k{color:var(--mut)} .kv .v{font-variant-numeric:tabular-nums}
+  .mut{color:var(--mut)}
+  .bul{margin:0;padding-left:18px;font-size:14px;line-height:1.6}
+  .comp{display:grid;grid-template-columns:46px 1fr auto;gap:8px;font-size:13px;padding:4px 0;border-bottom:1px solid #f3f3f3}
+  .comp .mi{color:var(--mut);font-variant-numeric:tabular-nums}
+  .bar{display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0}
+  .bar .lab{width:150px;color:#444} .bar .track{flex:1;height:7px;background:#eee;border-radius:4px;overflow:hidden}
+  .bar .fill{height:100%;background:#0b7} .bar .pts{width:54px;text-align:right;font-variant-numeric:tabular-nums;color:#555}
+  .bar .det{flex-basis:100%;color:var(--mut);font-size:11px;padding-left:150px;margin-top:-2px}
+  .htbl{width:100%;border-collapse:collapse;font-size:13px}
+  .htbl td,.htbl th{text-align:left;padding:5px 8px;border-bottom:1px solid #f1f1f1;white-space:nowrap}
+  .htbl th{color:var(--mut);font-weight:600;font-size:12px}
+  .cut{color:#c33;font-weight:600} .rise{color:#888}
+  .flag-ok{color:#0a7} .flag-no{color:#c33}
 </style>
 </head>
 <body>
@@ -72,6 +106,8 @@
   <tbody id="body"></tbody>
 </table>
 <div class="empty" id="empty" style="display:none">No deals match these filters.</div>
+
+<div id="detail" style="display:none"></div>
 
 <div id="login"><form onsubmit="return doLogin(event)">
   <h2>RTP Deal Dashboard</h2>
@@ -165,7 +201,141 @@ function buildHead(){
   });
 }
 
-function showDetail(kind,id){ toast(`Detail for ${kind} #${id} — coming in slice 4`); }
+const STATUS_LABEL={underwriting:'Underwriting',loi_sent:'LOI sent',under_contract:'Under contract',lost:'Lost',passed:'Passed',lead:'Lead'};
+async function setStatus(kind,id,status){
+  if((status==='lost'||status==='passed') &&
+     !confirm(`Mark this deal "${STATUS_LABEL[status]}"? This removes it from the active pipeline.`)) return;
+  const r=await fetch(`/api/deals/${kind}/${id}/status`,{method:'POST',
+    headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
+  if(r.status===401){ showLogin(); return; }
+  if(r.ok){ const res=await r.json(); toast(`${res.old} → ${res.new}`);
+    await load(); showDetail(kind,id); }
+  else toast('failed ('+r.status+')'); }
+
+const LAB={cap_stabilized:'Stabilized cap',cap_current:'Current cap',ppu:'$/unit vs market',
+  dscr:'DSCR',rent_upside:'Rent upside',units:'Unit sweet-spot',dom:'Days on market'};
+const pct=r=>r==null?'—':(r*100).toFixed(1)+'%';
+const rentMo=d=>d==null?'<span class="mut">not provided</span>':'$'+Number(d).toLocaleString()+'/mo';
+const num2=x=>x==null?'—':Number(x).toFixed(2);
+function flag(f){ return f? '<span class="flag-ok">✓</span>':'<span class="flag-no">✗</span>'; }
+
+function setView(showDetailView){
+  document.querySelector('.filters').style.display=showDetailView?'none':'';
+  document.getElementById('tbl').style.display=showDetailView?'none':'';
+  document.getElementById('detail').style.display=showDetailView?'block':'none';
+  if(!showDetailView) document.getElementById('empty').style.display='none';
+}
+function back(){ setView(false); }
+
+async function showDetail(kind,id){
+  const r=await fetch(`/api/deals/${kind}/${id}`);
+  if(r.status===401){ showLogin(); return; }
+  const d=await r.json();
+  const c=await (await fetch(`/api/deals/${kind}/${id}/comps?radius_miles=10&limit=15`)).json();
+  renderDetail(d,c); setView(true); window.scrollTo(0,0);
+}
+
+function renderDetail(d,c){
+  const dl=d.deal, u=d.underwriting||{}, bf=(u.buy_box_flags)||{};
+  const bd=bf._score_breakdown||{}, na=bf._not_assessed||[];
+  const ppu=dl.price_per_unit, ask=dl.effective_ask;
+
+  // score breakdown bars
+  const bars=Object.keys(bd).map(k=>{ const b=bd[k]; const w=Math.min(100,(b.contribution||0)/25*100);
+    return `<div class="bar"><span class="lab">${LAB[k]||k}</span>
+      <span class="track"><span class="fill" style="width:${w}%"></span></span>
+      <span class="pts">+${(b.contribution??0).toFixed(1)}</span>
+      <span class="det">${b.detail||''}</span></div>`; }).join('');
+  const naHtml=na.length?`<div class="mut" style="font-size:12px;margin-top:8px">Not assessed: ${na.join('; ')}</div>`:'';
+
+  // buy-box criteria
+  const crit=['geography','units','price','year_built','property_class'].filter(k=>bf[k])
+    .map(k=>`<span style="margin-right:12px">${flag(bf[k].pass)} ${k.replace('_',' ')}</span>`).join('');
+
+  // metrics
+  const metrics=[
+    ['Current cap',pct(u.implied_cap_current)],['Stabilized cap',pct(u.implied_cap_stabilized)],
+    ['Rent upside',pct(u.rent_upside_pct)],['DSCR',num2(u.estimated_dscr)],
+    ['Est. 5-yr IRR',pct(u.estimated_irr_5yr)],['$/unit vs mkt',pct(u.price_per_unit_vs_market)],
+  ].map(([k,v])=>`<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
+
+  // summary bullets
+  const bullets=(u.summary||'').split('\n').filter(x=>x.trim());
+  const sumHtml=bullets.length?`<ul class="bul">${bullets.map(b=>`<li>${b}</li>`).join('')}</ul>`
+    :'<div class="mut">No notable signals flagged.</div>';
+
+  // financials
+  const f=d.financials;
+  const finRows=f?[['Gross scheduled rent',money(f.gross_revenue)],['NOI',money(f.noi)],
+    ['Total expenses',money(f.total_expenses)],['Taxes',money(f.taxes)],['Insurance',money(f.insurance)],
+    ['Cap rate (stated)',pct(f.cap_rate)],['Vacancy',pct(f.vacancy_rate)],
+    ['Source / confidence',`${f.data_source||'—'} / ${f.confidence||'—'}`]]
+    .filter(([k,v])=>v&&v!=='—'&&v!=='$NaN').map(([k,v])=>`<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('')
+    :'';
+  const finHtml=finRows||'<div class="mut">Not provided — no structured financials for this deal yet.</div>';
+
+  // unit mix
+  const um=d.unit_mix||[];
+  const umHtml=um.length?`<table class="htbl"><tr><th>Type</th><th>#</th><th>In-place</th><th>Market</th><th>Δ</th></tr>
+    ${um.map(m=>`<tr><td>${m.unit_type||'—'}</td><td>${m.count??'—'}</td>
+      <td>${rentMo(m.avg_rent)}</td><td>${rentMo(m.market_rent)}</td><td>${pct(m.rent_delta_pct)}</td></tr>`).join('')}</table>`
+    :'<div class="mut">Not provided.</div>';
+
+  // comps
+  const comps=(c.comps||[]);
+  const compHtml=comps.length?comps.map(x=>`<div class="comp">
+      <span class="mi">${x.miles!=null?x.miles+' mi':''}</span>
+      <span>${x.address||'—'}, ${x.city} ${x.state} · ${x.units||'?'}u · <span class="stat ${x.status}">${x.status}</span></span>
+      <span>${money(x.asking_price)} · ${money(x.price_per_unit)}/u</span></div>`).join('')
+    :'<div class="mut">No comps found.</div>';
+
+  // history — the price/status trail (motivated-seller signal); enrichment noise collapsed
+  const allH=d.history||[];
+  const h=allH.filter(x=>x.field==='asking_price'||x.field==='status');
+  const otherN=allH.length-h.length;
+  const histHtml=(h.length?`<table class="htbl"><tr><th>Date</th><th>Field</th><th>Change</th></tr>
+    ${h.map(x=>{ let chg;
+      if(x.field==='asking_price'){ const o=+x.old_value,n=+x.new_value; const cut=n<o;
+        chg=`<span class="${cut?'cut':'rise'}">${cut?'▼':'▲'} ${money(o)} → ${money(n)}</span>`; }
+      else chg=`${x.old_value??'—'} → <b>${x.new_value??'—'}</b>`;
+      return `<tr><td>${(x.changed_at||'').slice(0,10)}</td><td>${x.field.replace('_',' ')}</td><td>${chg}</td></tr>`;}).join('')}</table>`
+    :'<div class="mut">No price or status changes recorded.</div>')
+    + (otherN?`<div class="mut" style="font-size:12px;margin-top:6px">+ ${otherN} field enrichment(s)</div>`:'');
+
+  // links
+  const L=d.links||{};
+  const link=(href,txt)=>href?`<a href="${href}" target="_blank">${txt}</a>`:`<span class="mut">${txt}: —</span>`;
+  const linksHtml=[link(L.gmail_thread,'Gmail thread'),
+    L.drive_folder_id?link('https://drive.google.com/drive/folders/'+L.drive_folder_id,'Drive folder'):link(null,'Drive'),
+    link(L.om_url,'OM'),link(L.boe_url,'BOE')].join(' &nbsp;·&nbsp; ');
+
+  document.getElementById('detail').innerHTML=`
+    <a class="back" onclick="back()">← back to deals</a>
+    <div class="dhead"><h2><a class="addr" href="${mapsUrl(dl)}" target="_blank">${dl.name||'—'}</a></h2>
+      ${dl.tier?`<span class="badge ${dl.tier}">${dl.tier}</span>`:''}
+      <span class="mut">score ${dl.score??'—'} · ${dl.score_confidence||'—'} conf</span>
+      <span class="stat ${dl.status}">${dl.status}</span></div>
+    <div class="dsub">${dl.market} ${dl.state} · ${dl.effective_units||'?'} units · ${money(ask)} · ${money(ppu)}/unit · last seen ${(dl.last_seen_at||'').slice(0,10)}</div>
+    <div class="actions">
+      <button onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'underwriting')">→ Underwriting</button>
+      <button onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'loi_sent')">→ LOI sent</button>
+      <button onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'under_contract')">→ Under contract</button>
+      <button class="danger" onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'lost')">→ Lost</button>
+      <button class="danger" onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'passed')">→ Passed</button>
+      <button class="ok" onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'lead')">Reactivate</button>
+    </div>
+    <div class="grid">
+      <div class="card wide"><h3>Score breakdown</h3>${bars||'<span class="mut">no components scored</span>'}${naHtml}
+        <div style="margin-top:10px;font-size:12px">Buy-box: ${crit} ${flag(dl.meets_buy_box)} meets buy box</div></div>
+      <div class="card"><h3>Quick metrics</h3>${metrics}</div>
+      <div class="card"><h3>AI summary</h3>${sumHtml}</div>
+      <div class="card"><h3>Financials</h3>${finHtml}</div>
+      <div class="card"><h3>Unit mix (in-place vs market)</h3>${umHtml}</div>
+      <div class="card wide"><h3>Price &amp; status history</h3>${histHtml}</div>
+      <div class="card wide"><h3>Comps — ${c.basis||''}</h3>${compHtml}</div>
+      <div class="card wide"><h3>Links</h3>${linksHtml}</div>
+    </div>`;
+}
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.style.opacity=1;
   clearTimeout(t._h); t._h=setTimeout(()=>t.style.opacity=0,1800); }
 

@@ -1,28 +1,21 @@
-"""Daily 6:30am job for Railway cron: freshness sweep, THEN send the briefing.
-One entrypoint so a single cron service runs both in order.
-  python scripts/daily_job.py            sweep + send briefing to DISPATCH_EMAIL
-  python scripts/daily_job.py --dry      sweep (rolled back) + render preview, no send
+"""Daily 6:30am job for Railway cron: send the briefing.
+(No freshness sweep anymore — activeness is by last_seen_at within active_lead_days,
+filtered in the briefing query; a quiet lead is just noted, never status-changed.)
+  python scripts/daily_job.py            send briefing to DISPATCH_EMAIL
+  python scripts/daily_job.py --dry      render preview, no send
 """
 import sys
 import pathlib
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from _conn import connect
-from ingest import freshness, briefing, gmail_client as gc
+from ingest import briefing, gmail_client as gc
 
 DRY = "--dry" in sys.argv
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
 def main():
-    with connect(autocommit=False) as conn:
-        demoted = freshness.sweep(conn)
-        if DRY:
-            conn.rollback()
-        else:
-            conn.commit()
-        print(f"[daily] sweep demoted {len(demoted)} deal(s) -> stale")
-
     svc = None if DRY else gc.service()
     with connect(autocommit=False) as conn:
         res = briefing.run(conn, svc=svc, send=not DRY,

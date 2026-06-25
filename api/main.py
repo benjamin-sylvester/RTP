@@ -11,6 +11,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from api import db
 from api.auth import check_password, require_auth
+from ingest import freshness
 from ingest.gmail_client import _load_env
 
 _load_env()
@@ -44,7 +45,7 @@ _STATIC = pathlib.Path(__file__).parent / "static"
 def index():
     return FileResponse(_STATIC / "index.html")
 
-ACTIVE = ["lead", "underwriting", "under_contract"]
+ACTIVE = ["lead", "underwriting", "loi_sent", "under_contract"]
 SORTABLE = {  # whitelist -> column
     "score": "score", "units": "effective_units", "ask": "effective_ask",
     "ppu": "price_per_unit", "last_seen": "last_seen_at", "market": "market",
@@ -69,7 +70,7 @@ def list_deals(
     units_max: int | None = None,
     score_min: int | None = None,
     status: str | None = Query(None, description="comma list; overrides default active set"),
-    comps: bool = False, stale: bool = False, needs_review: bool = False,
+    comps: bool = False, needs_review: bool = False, closed: bool = False, quiet: bool = False,
     sort: str = "default", order: str = "desc",
     limit: int = 200, offset: int = 0,
     _auth=Depends(require_auth),
@@ -81,13 +82,17 @@ def list_deals(
         statuses = list(ACTIVE)
         if comps:
             statuses.append("comp_only")
-        if stale:
-            statuses.append("stale")
         if needs_review:
             statuses.append("needs_review")
+        if closed:
+            statuses += ["passed", "lost"]
 
-    where = ["status = ANY(%s)"]
-    params: list = [statuses]
+    # recency: only LEADS must be seen within active_lead_days to count as active (a lead
+    # gone quiet drops out by date). Manually-advanced deals (underwriting+) and comps/passed
+    # are never time-filtered. `quiet=true` or an explicit status set disables the filter.
+    where = ["status = ANY(%s)",
+             "(%s OR status <> 'lead' OR last_seen_at > NOW() - make_interval(days => %s))"]
+    params: list = [statuses, (quiet or bool(status)), freshness.active_lead_days()]
     if tier:
         where.append("tier = %s"); params.append(tier)
     if city:
@@ -178,3 +183,18 @@ def deal_comps(kind: str, deal_id: int, radius_miles: float = 10, limit: int = 2
             (market, deal_id if kind == "listing" else -1, limit))
         basis = f"same market ({market})"
     return {"deal_id": deal_id, "kind": kind, "basis": basis, "count": len(rows), "comps": rows}
+
+
+@app.post("/api/deals/{kind}/{deal_id}/status")
+def set_deal_status(kind: str, deal_id: int, payload: dict = Body(...),
+                    _auth=Depends(require_auth)):
+    new_status = (payload or {}).get("status")
+    reason = (payload or {}).get("reason")
+    if new_status not in freshness.MANUAL_TARGETS:
+        raise HTTPException(400, f"status must be one of {list(freshness.MANUAL_TARGETS)}")
+    with db.connect() as conn:
+        res = freshness.set_status(conn, kind, deal_id, new_status, reason)
+        conn.commit()
+    if not res:
+        raise HTTPException(404, "deal not found")
+    return res

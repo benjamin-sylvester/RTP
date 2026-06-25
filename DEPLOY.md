@@ -7,7 +7,7 @@ auto-deploys on push to `master`.
 | Service | Start command | Cron (UTC) | What it does |
 |---|---|---|---|
 | `rtp-ingest` | `python scripts/run_ingest.py` | `*/15 * * * *` | every 15 min: pull Deal Flow, parse/dedup/route, **process reply-to-kill**, label processed |
-| `rtp-briefing` | `python scripts/daily_job.py` | `30 10 * * *` | daily: freshness **sweep**, then send the briefing to `DISPATCH_EMAIL` |
+| `rtp-briefing` | `python scripts/daily_job.py` | `30 10 * * *` | daily: send the briefing to `DISPATCH_EMAIL` (no sweep — activeness is by last_seen_at) |
 
 > **Timezone:** Railway cron is **UTC**. `30 10 * * *` = 6:30am **EDT** (summer). In winter
 > (EST) 6:30am ET is `30 11 * * *`. Adjust the briefing cron at the DST change, or set it once
@@ -44,7 +44,7 @@ Cron schedule + start command per service are still set in the dashboard (Settin
 ## Verifying it runs ON RAILWAY (not locally)
 - Each service's **Deployments → Logs** shows the cron firing. `run_ingest.py` prints
   `[ingest] N unprocessed message(s)` and `[reply-cmd] processed …`; `daily_job.py` prints
-  `[daily] sweep demoted …` then `[daily] briefing: … SENT id=…`.
+  `[daily] briefing: … SENT id=…`.
 - Reply-to-kill is handled by `rtp-ingest` (it reads briefing replies each cycle), so it only
   works once that service is live on Railway.
 

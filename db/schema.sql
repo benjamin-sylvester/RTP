@@ -41,7 +41,10 @@ CREATE TABLE listings (
     lot_sf          INTEGER,
     property_class  TEXT,                         -- A, B, C
     status          TEXT NOT NULL DEFAULT 'comp_only',
-                    -- comp_only | lead | underwriting | under_contract | closed | withdrawn | expired | dead
+                    -- STATUS_MODEL.md: comp_only | lead | underwriting | loi_sent | under_contract
+                    --   | lost | passed  (+ needs_review = system quarantine).
+                    -- System auto-moves ONLY comp_only<->lead; the rest are manual + sticky.
+                    -- Activeness is by last_seen_at within active_lead_days (no 'stale' status).
     source          TEXT NOT NULL,                -- mls_export | broker_email | costar | manual
     broker_name     TEXT,
     broker_email    TEXT,

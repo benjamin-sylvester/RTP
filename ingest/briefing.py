@@ -6,10 +6,9 @@ tracked last_briefed_at so deals never repeat; the timestamp advances only on a 
 import os
 import re
 
-from ingest import gmail_client as gc
+from ingest import gmail_client as gc, freshness
 
 GMAIL_THREAD = "https://mail.google.com/mail/u/0/#all/"
-PIPELINE_STATUSES = ("lead", "underwriting", "under_contract", "needs_review")
 
 
 def _usd(cents):
@@ -38,7 +37,8 @@ def get_since(conn):
 
 
 def gather(conn, since):
-    # leads ordered exactly like v_pipeline_deals: tier -> confidence -> score
+    days = freshness.active_lead_days()
+    # new leads: active-status AND seen within active_lead_days, ordered tier->conf->score
     new_leads = conn.execute(
         """SELECT d.deal_kind, d.deal_id, d.name, d.market, d.state, d.effective_units,
                   d.effective_ask, d.score, d.tier, d.score_confidence, d.summary,
@@ -47,11 +47,24 @@ def gather(conn, since):
            LEFT JOIN listings l ON d.deal_kind='listing' AND l.id=d.deal_id
            LEFT JOIN packages p ON d.deal_kind='package' AND p.id=d.deal_id
            WHERE COALESCE(l.date_ingested, p.created_at) > %s
+             AND (d.status <> 'lead'
+                  OR COALESCE(l.last_seen_at, p.last_seen_at) > NOW() - make_interval(days => %s))
            ORDER BY CASE d.tier WHEN 'Priority' THEN 0 WHEN 'Watch' THEN 1
                                 WHEN 'Pass' THEN 2 ELSE 3 END,
                     CASE d.score_confidence WHEN 'high' THEN 0 WHEN 'medium' THEN 1
                                             WHEN 'low' THEN 2 ELSE 3 END,
-                    d.score DESC NULLS LAST""", (since,)).fetchall()
+                    d.score DESC NULLS LAST""", (since, days)).fetchall()
+
+    # leads gone quiet: active status but last seen older than active_lead_days (NO status change)
+    gone_quiet = conn.execute(
+        """SELECT d.deal_id, d.name, d.market, d.state, d.effective_units, d.effective_ask,
+                  COALESCE(l.last_seen_at, p.last_seen_at)::date AS last_seen
+           FROM v_pipeline_deals d
+           LEFT JOIN listings l ON d.deal_kind='listing' AND l.id=d.deal_id
+           LEFT JOIN packages p ON d.deal_kind='package' AND p.id=d.deal_id
+           WHERE d.status='lead'
+             AND COALESCE(l.last_seen_at, p.last_seen_at) < NOW() - make_interval(days => %s)
+           ORDER BY last_seen""", (days,)).fetchall()
 
     changes = conn.execute(
         """SELECT l.id, l.address, l.city, l.state, l.units, l.asking_price, l.status,
@@ -71,15 +84,13 @@ def gather(conn, since):
         "ORDER BY state, city").fetchall()
 
     # cols: 0 id,1 addr,2 city,3 state,4 units,5 ask,6 status,7 field,8 old,9 new
-    # aged-out leads (lead -> stale demotions) get their own line — not comps
-    aged_out = [c for c in changes if c[7] == "status" and c[9] == "stale" and c[8] == "lead"]
-    rest = [c for c in changes if c not in aged_out]
-    pipeline_changes = [c for c in rest if c[6] in PIPELINE_STATUSES]
-    market_changes = [c for c in rest if c[6] not in PIPELINE_STATUSES]
-    price_cuts = [c for c in rest if c[7] == "asking_price" and int(c[9]) < int(c[8])]
-    return {"new_leads": new_leads, "pipeline_changes": pipeline_changes,
-            "market_changes": market_changes, "price_cuts": price_cuts, "aged_out": aged_out,
-            "enrich_n": enrich_n, "needs_review": needs_review}
+    # pipeline (anything you own) vs market comps (comp_only); status changes are manual now
+    pipeline_changes = [c for c in changes if c[6] != "comp_only"]
+    market_changes = [c for c in changes if c[6] == "comp_only"]
+    price_cuts = [c for c in changes if c[7] == "asking_price" and int(c[9]) < int(c[8])]
+    return {"new_leads": new_leads, "gone_quiet": gone_quiet,
+            "pipeline_changes": pipeline_changes, "market_changes": market_changes,
+            "price_cuts": price_cuts, "enrich_n": enrich_n, "needs_review": needs_review}
 
 
 def _maps_link(name, market, state):
@@ -116,11 +127,11 @@ def _lead_card(r):
 
 def render_html(data, since):
     nl, pc, nr = data["new_leads"], data["price_cuts"], data["needs_review"]
-    pipe_ch, mkt_ch, aged = data["pipeline_changes"], data["market_changes"], data["aged_out"]
+    pipe_ch, mkt_ch, quiet = data["pipeline_changes"], data["market_changes"], data["gone_quiet"]
     header = (f"{len(nl)} new lead{'s'*(len(nl)!=1)} · {len(pc)} price cut{'s'*(len(pc)!=1)} "
               f"· {len(nr)} needs review")
 
-    if not nl and not pipe_ch and not mkt_ch and not aged and not nr:
+    if not nl and not pipe_ch and not mkt_ch and not quiet and not nr:
         return (f'<div style="font-family:system-ui,Arial">'
                 f'<h2>RTP Deal Briefing</h2><p>No new deals or changes today.</p></div>'), header
 
@@ -151,10 +162,10 @@ def render_html(data, since):
                            f'{old} → {new}</li>')
         return out
 
-    def aged_label(c):
-        _id, addr, city, st, units, ask = c[0], c[1], c[2], c[3], c[4], c[5]
-        who = addr if (addr and addr.lower() not in ("unknown", "?")) else f"{units or '?'}-unit"
-        return f"#{_id} {who}, {city} ({_usd(ask)})"
+    def quiet_label(c):
+        did, name, city, st, units, ask, last_seen = c
+        who = name if (name and name.lower() not in ("unknown", "?")) else f"{units or '?'}-unit"
+        return f"#{did} {who}, {city} — last seen {last_seen}"
 
     if pipe_ch:
         parts.append('<h3 style="font-size:14px;color:#444;margin:20px 0 6px">'
@@ -171,11 +182,11 @@ def render_html(data, since):
         parts.append(f'<div style="color:#999;font-size:12px;margin-top:4px">'
                      f'+ {data["enrich_n"]} field enrichment(s) across deals</div>')
 
-    if aged:
-        items = "".join(f"<li>{aged_label(a)}</li>" for a in aged)
+    if quiet:
+        items = "".join(f"<li>{quiet_label(a)}</li>" for a in quiet)
         parts.append(f'<div style="color:#999;font-size:12px;margin-top:14px">'
-                     f'<b style="color:#777">AGED OUT ({len(aged)})</b> — leads gone quiet past '
-                     f'the active window, now comps:'
+                     f'<b style="color:#777">LEADS GONE QUIET ({len(quiet)})</b> — still leads, but '
+                     f'not seen in {freshness.active_lead_days()}+ days; review and mark passed/lost:'
                      f'<ul style="margin:4px 0 0;padding-left:18px">{items}</ul></div>')
 
     if nr:

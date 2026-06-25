@@ -38,10 +38,10 @@ def process_replies(svc, conn, dispatch_email=None, log=print):
         text = m["plain"].strip() or html_to_text(m["html"])
         ids = parse_kill_ids(text)
         for did in ids:
-            row = freshness.kill(conn, did, reason="reply-to-kill")
+            row = freshness.kill(conn, did, reason="reply-to-kill")  # -> passed
             if row:
                 killed.append(did)
-                log(f"[reply-cmd] killed #{did} {row[1]}, {row[2]}")
+                log(f"[reply-cmd] #{did} {row['name']} -> passed")
         conn.commit()
         svc.users().messages().modify(
             userId="me", id=mm["id"], body={"addLabelIds": [label_id]}).execute()
