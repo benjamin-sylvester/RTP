@@ -54,7 +54,9 @@
   #detail .back{display:inline-block;margin-bottom:12px;color:#0848c4;text-decoration:none;font-size:13px;cursor:pointer}
   #detail .dhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:2px}
   #detail .dhead h2{margin:0;font-size:20px}
-  #detail .dsub{color:var(--mut);font-size:14px;margin-bottom:16px}
+  #detail .dsub{color:var(--mut);font-size:14px;margin-bottom:8px}
+  #detail .contact{font-size:14px;margin-bottom:14px}
+  #detail .contact a{color:#0848c4;text-decoration:none}
   #detail .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   @media(max-width:760px){#detail .grid{grid-template-columns:1fr}}
   .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 16px}
@@ -96,8 +98,9 @@
   <label>Status <input id="f-status" placeholder="override (comma list)"></label>
   <div class="toggles">
     <label><input type="checkbox" id="t-comps"> comps</label>
-    <label><input type="checkbox" id="t-stale"> stale</label>
     <label><input type="checkbox" id="t-needs"> needs_review</label>
+    <label><input type="checkbox" id="t-quiet"> incl. quiet</label>
+    <label><input type="checkbox" id="t-closed"> lost/passed</label>
   </div>
 </div>
 
@@ -128,8 +131,16 @@ const COLS = [
   {k:'score', t:'Score', num:true},
   {k:'score_confidence', t:'Conf'},
   {k:'status', t:'Status', stat:true},
+  {k:'source_broker', t:'Source / Broker', srcbroker:true},
   {k:'last_seen_at', t:'Last seen', date:true},
 ];
+function sourceBroker(d){
+  const s=d.source, name=d.broker_name, email=d.broker_email;
+  if(s==='mls_export'||s==='mlspin'||s==='primemls') return '<span class="mut">MLS</span>';
+  if(email) return `<a class="addr" href="mailto:${email}" title="${email}" onclick="event.stopPropagation()">${name||email}</a>`;
+  if(name) return name;
+  return s ? `<span class="mut">${s}</span>` : '—';
+}
 let DEALS = [], sortCol = null, sortDir = -1;   // null => server default order
 
 function money(c){ return c==null ? '—' : '$'+Math.round(c/100).toLocaleString(); }
@@ -145,8 +156,9 @@ function qs(){
   if(umin) p.set('units_min',umin); if(umax) p.set('units_max',umax);
   if(smin) p.set('score_min',smin); if(status) p.set('status',status);
   if(chk('t-comps')) p.set('comps','true');
-  if(chk('t-stale')) p.set('stale','true');
   if(chk('t-needs')) p.set('needs_review','true');
+  if(chk('t-quiet')) p.set('quiet','true');
+  if(chk('t-closed')) p.set('closed','true');
   return p.toString();
 }
 const val=id=>document.getElementById(id).value.trim();
@@ -183,6 +195,7 @@ function render(){
       if(c.date) return `<td>${dt(v)}</td>`;
       if(c.badge) return `<td>${v?`<span class="badge ${v}">${v}</span>`:'—'}</td>`;
       if(c.stat) return `<td><span class="stat ${v}">${v}</span></td>`;
+      if(c.srcbroker) return `<td>${sourceBroker(d)}</td>`;
       if(c.num) return `<td class="num">${v==null?'—':v}</td>`;
       return `<td>${v==null?'—':v}</td>`;
     }).join('');
@@ -316,6 +329,13 @@ function renderDetail(d,c){
       <span class="mut">score ${dl.score??'—'} · ${dl.score_confidence||'—'} conf</span>
       <span class="stat ${dl.status}">${dl.status}</span></div>
     <div class="dsub">${dl.market} ${dl.state} · ${dl.effective_units||'?'} units · ${money(ask)} · ${money(ppu)}/unit · last seen ${(dl.last_seen_at||'').slice(0,10)}</div>
+    <div class="contact">${
+      dl.broker_email
+        ? `<b>Contact:</b> ${dl.broker_name||'broker'} · <a href="mailto:${dl.broker_email}">${dl.broker_email}</a>`
+        : (dl.source==='mls_export'
+            ? `<span class="mut">Source: MLS listing</span>`
+            : (dl.broker_name ? `<b>Contact:</b> ${dl.broker_name}` : `<span class="mut">No broker contact on file</span>`))
+    }</div>
     <div class="actions">
       <button onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'underwriting')">→ Underwriting</button>
       <button onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'loi_sent')">→ LOI sent</button>
