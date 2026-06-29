@@ -54,6 +54,12 @@ def run_once(commit=True, after=AFTER_FLOOR, do_label=True, log=print):
                 reply_commands.process_replies(svc, conn, log=log)
             except Exception as e:
                 log(f"[reply-cmd] error: {e}")
+            # engagement auto-promotion: any deal Ben has replied to is a pipeline deal
+            try:
+                from ingest import engagement
+                engagement.run(conn, svc, log=log)
+            except Exception as e:
+                log(f"[engage] error: {e}")
         for mid in ids:
             msg = gc.get_message(svc, mid)
             bkey, path, cands = pipeline.extract_candidates(svc, msg, session)

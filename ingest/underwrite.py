@@ -236,9 +236,12 @@ def city_median_ppu(conn, city, exclude_id):
 def buy_box_flags(state, city, units, price_usd, year_built, prop_class):
     bb = routing.buy_box()
     flags, fails = {}, 0
-    st_ok = (state or "").strip().upper() == bb["geography"]["state"]
-    flags["geography"] = {"pass": st_ok, "value": state,
-                          "in_corridor": (city or "").lower() in routing.corridor_markets()}
+    st = (state or "").strip().upper()
+    in_corridor = (st, (city or "").strip().lower()) in routing.corridor_pairs()
+    # in-box geography (multi-state): a named corridor (any allowed state) OR the primary
+    # state. Non-primary states (MA) pass only via a corridor; mirrors ingest/routing.route.
+    st_ok = st in routing.allowed_states() and (in_corridor or st == routing.primary_state())
+    flags["geography"] = {"pass": st_ok, "value": state, "in_corridor": in_corridor}
     u_ok = units is not None and bb["units"]["min"] <= units <= bb["units"]["max"]
     flags["units"] = {"pass": u_ok, "value": units,
                       "range": [bb["units"]["min"], bb["units"]["max"]]}

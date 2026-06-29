@@ -1,8 +1,10 @@
 # RTP Buy Box: single source of truth.
 # Read by BOTH the app (underwriting filter) and Cowork (deal triage).
-# CONFIRMED by Ben 2026-06-22: Southern NH only. MA is out of box. Floor = 4 units.
+# CONFIRMED by Ben 2026-06-22: Southern NH. 2026-06-29: added the MA SouthCoast corridor
+# (Fall River + New Bedford). NH is the home turf (in-state deals are leads even outside a
+# named corridor); MA is in-box ONLY for the SouthCoast corridor cities. Floor = 4 units.
 
-version: 2026-06-22b
+version: 2026-06-29
 status: confirmed
 
 units:
@@ -27,14 +29,24 @@ strategy:
   - on_market
   - off_market
 
+# Multi-state. `states` = where we'll consider a deal at all. `primary_state` is the home
+# turf: a primary-state deal that fits size+price is a (borderline) lead even outside a named
+# corridor. NON-primary states (MA) are in-box ONLY via a named corridor below — so all-of-MA
+# does NOT become leads, just the SouthCoast cities. Routing matches corridors on city+state.
 geography:
-  state: NH
-  region: Southern NH
+  states: [NH, MA]
+  primary_state: NH
+  region: "Southern NH + MA SouthCoast"
   corridors:
     - name: "I-93 / Merrimack Valley"
+      state: NH
       markets: [Manchester, Nashua, Derry, Londonderry, Salem]
     - name: "Strafford County"
+      state: NH
       markets: [Dover, Rochester, Somersworth, Farmington, Milton]
+    - name: "MA SouthCoast"
+      state: MA
+      markets: [Fall River, New Bedford]
 
 # Scoring weights for the composite 0-100 score (auto_underwriting.score). Sum = 1.00.
 scoring_weights:

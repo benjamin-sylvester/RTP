@@ -10,10 +10,14 @@ metadata:
 Snapshot as of late June 2026. Detailed history in the per-phase notes; this is the live picture.
 
 ## What's live (on Railway, auto-deploy from master)
-- **Postgres** (the core data asset): ~72 listings + 2 packages, geocoded, auto-underwritten,
-  HUD-FMR rent_comps. Migrations through 009 applied to the live DB.
+- **Postgres** (the core data asset): geocoded, auto-underwritten, HUD-FMR rent_comps.
+  Migrations through 009 applied to the live DB.
+- **Buy box is multi-state** (buy_box.yaml v2026-06-29): NH (home turf — in-state deals are
+  leads even outside a named corridor) + **MA SouthCoast corridor** (Fall River, New Bedford).
+  All-of-MA is NOT in box — only the SouthCoast cities. Routing matches city+state.
 - **Ingestion** (`rtp-ingest`, 15-min cron): Gmail "Deal Flow" -> parse (structured MLS + AI) ->
-  dedup/enrich -> route (comp_only/lead) -> auto-underwrite. Also runs **reply-to-kill**.
+  dedup/enrich -> route (comp_only/lead) -> auto-underwrite. Also runs **reply-to-kill** and
+  **engagement auto-promotion** (see below).
 - **Daily briefing** (`rtp-briefing`, 6:30am ET): HTML email to ben@rtprei.com — new leads,
   changes, "leads gone quiet", needs_review.
 - **Dashboard** (`rtp-dashboard`, always-on web, single-password): deal table + filters/toggles,
@@ -32,6 +36,16 @@ Snapshot as of late June 2026. Detailed history in the per-phase notes; this is 
   logged to listing_history.
 - **Source / Broker surfacing** (migration 009): table column + detail "Contact" line — MLS deals
   show "MLS"; broker deals show the broker name as a `mailto:` link for one-click outreach.
+- **Engagement auto-promotion** (`ingest/engagement.py`, every cycle): if Ben REPLIED in a deal's
+  Gmail thread, the deal is a pipeline deal regardless of buy box. Finds threads Ben SENT mail in
+  (one `in:sent` list call), matches by raw_email_id, AI-infers stage from his own words
+  (tour / P&L / rent-roll -> underwriting; offer / LOI -> loi_sent; else lead; a *decline* like
+  "too rural" promotes nothing). Forward-only (never downgrades), sticky terminals
+  (passed/lost/under_contract) are flagged not flipped, package members skipped, logged to
+  listing_history. Wired into `runner.run_once` right after reply-to-kill (commit-only).
+- **MA SouthCoast launch (2026-06-29)**: `scripts/ma_southcoast.py` created the Sprague+Nelson
+  package (#4: 282 Sprague St Fall River + 49 Nelson St New Bedford, 12u $1.62M, Lyndsey Pachon,
+  -> underwriting) and re-routed MA comps — 14 Fall River/New Bedford deals promoted comp_only->lead.
 
 ## What's next
 - **UI / buttons polish** — dashboard refinements (inline status actions in the table, tighter
