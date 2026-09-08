@@ -52,7 +52,8 @@ def run_once(commit=True, after=AFTER_FLOOR, do_label=True, log=print):
     accts = gc.accounts()
     session = requests.Session()
     s = {"messages": 0, "listings": 0, "inserted": 0, "enriched": 0,
-         "linked_package": 0, "needs_review": 0, "no_listing": 0, "labeled": 0}
+         "linked_package": 0, "needs_review": 0, "no_listing": 0, "labeled": 0,
+         "errors": 0}
     log(f"[ingest] {len(accts)} inbox(es): " +
         ", ".join(f"{a['key']}({a['email'] or '?'})" for a in accts))
     conn = _connect()
@@ -80,27 +81,41 @@ def run_once(commit=True, after=AFTER_FLOOR, do_label=True, log=print):
             mode = f"scan-all ({scan_query})" if scan_query else f"label '{DEAL_FLOW_LABEL}'"
             log(f"[ingest:{tag}] {len(ids)} unprocessed message(s) after {after} — {mode}")
             for mid in ids:
-                msg = gc.get_message(svc, mid)
-                bkey, path, cands = pipeline.extract_candidates(
-                    svc, msg, session, allow_unknown=bool(scan_query))
-                s["messages"] += 1
-                if not cands:
-                    s["no_listing"] += 1
-                for c in cands:
-                    res = dedup.upsert(conn, c, source=pipeline.source_for(path),
-                                       raw_email_id=c.get("_thread_id"),
-                                       session=session, account=tag)
-                    s["listings"] += 1
-                    s[res["action"]] = s.get(res["action"], 0) + 1
-                    if res.get("status") == "needs_review":
-                        s["needs_review"] += 1
-                if commit:
-                    conn.commit()
-                    if do_label:
-                        label_message(svc, mid, ing_label)
-                        s["labeled"] += 1
-                else:
+                # Isolate each message: a single malformed extraction (common when
+                # scanning a general inbox) must not crash the run or block the
+                # messages behind it. On error, roll back just this message, label
+                # it processed so it is not retried forever, and continue.
+                try:
+                    msg = gc.get_message(svc, mid)
+                    bkey, path, cands = pipeline.extract_candidates(
+                        svc, msg, session, allow_unknown=bool(scan_query))
+                    s["messages"] += 1
+                    if not cands:
+                        s["no_listing"] += 1
+                    for c in cands:
+                        res = dedup.upsert(conn, c, source=pipeline.source_for(path),
+                                           raw_email_id=c.get("_thread_id"),
+                                           session=session, account=tag)
+                        s["listings"] += 1
+                        s[res["action"]] = s.get(res["action"], 0) + 1
+                        if res.get("status") == "needs_review":
+                            s["needs_review"] += 1
+                    if commit:
+                        conn.commit()
+                        if do_label:
+                            label_message(svc, mid, ing_label)
+                            s["labeled"] += 1
+                    else:
+                        conn.rollback()
+                except Exception as e:
                     conn.rollback()
+                    s["errors"] += 1
+                    log(f"[ingest:{tag}] ERROR on msg {mid}: {type(e).__name__}: {e}")
+                    if commit and do_label:
+                        try:
+                            label_message(svc, mid, ing_label)  # don't reprocess a poison msg
+                        except Exception:
+                            pass
         log(f"[ingest] done: {s}")
         return s
     finally:

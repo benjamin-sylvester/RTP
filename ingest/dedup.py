@@ -57,7 +57,29 @@ def _lev(a, b):
 
 
 def _cents(usd):
-    return None if usd is None else round(float(usd) * 100)
+    if usd is None:
+        return None
+    if isinstance(usd, str):
+        usd = re.sub(r"[,$\s]", "", usd)
+        m = re.search(r"-?\d+(?:\.\d+)?", usd)
+        if not m:
+            return None
+        usd = m.group()
+    return round(float(usd) * 100)
+
+
+def _to_int(v):
+    """Coerce a candidate field to int, or None. The scan-all AI parser can return
+    messy values ('1925 & 1970', '12 units', '') that must not reach integer
+    columns. Takes the first integer found."""
+    if v is None or isinstance(v, bool):
+        return None
+    if isinstance(v, int):
+        return v
+    if isinstance(v, float):
+        return int(v)
+    m = re.search(r"-?\d+", str(v))
+    return int(m.group()) if m else None
 
 
 def _within(a, b, pct=PCT):
@@ -355,6 +377,11 @@ def upsert(conn, cand, source, raw_email_id=None, session=None, account=None):
     """Returns dict describing the action taken. `account` tags a NEW row with the
     inbox it came in through; on an enrich (deal already known, possibly from
     another inbox) the existing row keeps its original account."""
+    # sanitize integer-typed fields once, up front, so neither insert nor enrich
+    # can hand a messy AI value ('1925 & 1970', '12 units') to an integer column.
+    for f in ("units", "year_built", "building_sf", "lot_sf"):
+        if cand.get(f) is not None:
+            cand[f] = _to_int(cand[f])
     link = try_link_package(conn, cand)
     if link:
         return {"action": "linked_package", "listing_id": None,
