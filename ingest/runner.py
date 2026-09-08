@@ -22,13 +22,18 @@ def _connect():
     return psycopg.connect(os.environ["DATABASE_URL"])
 
 
-def unprocessed_ids(svc, after=AFTER_FLOOR):
-    """Deal Flow messages (after floor) lacking the RTP/Ingested label, oldest-first."""
-    df = gc.list_message_ids(svc, DEAL_FLOW_LABEL, after=after)
+def unprocessed_ids(svc, after=AFTER_FLOOR, scan_query=None):
+    """Candidate message ids lacking the RTP/Ingested label, oldest-first.
+    Default: messages under the Deal Flow label. If scan_query is given, scan all
+    mail matching that Gmail query instead (scan-all inbox)."""
+    if scan_query:
+        src = gc.list_message_ids_query(svc, scan_query, after=after)
+    else:
+        src = gc.list_message_ids(svc, DEAL_FLOW_LABEL, after=after)
     done = set()
     if gc.label_id(svc, INGESTED_LABEL):
         done = set(gc.list_message_ids(svc, INGESTED_LABEL))
-    return list(reversed([m for m in df if m not in done]))  # oldest-first
+    return list(reversed([m for m in src if m not in done]))  # oldest-first
 
 
 def label_message(svc, msg_id, label_id):
@@ -37,49 +42,65 @@ def label_message(svc, msg_id, label_id):
 
 
 def run_once(commit=True, after=AFTER_FLOOR, do_label=True, log=print):
-    """Process all currently-unprocessed messages. Returns a summary dict."""
-    svc = gc.service()
-    ing_label = gc.ensure_label(svc, INGESTED_LABEL)
-    ids = unprocessed_ids(svc, after)
+    """Process unprocessed Deal Flow messages across EVERY configured inbox
+    (gc.accounts()). Deals from all inboxes flow into the one shared DB; dedup
+    collapses the overlap. Returns a combined summary dict.
+
+    Per-account: reply-to-kill runs only on the primary inbox (the briefing is
+    sent from there, so replies round-trip there); engagement runs on each inbox
+    (each scans its own sent mail and matches its own ingested threads)."""
+    accts = gc.accounts()
     session = requests.Session()
     s = {"messages": 0, "listings": 0, "inserted": 0, "enriched": 0,
          "linked_package": 0, "needs_review": 0, "no_listing": 0, "labeled": 0}
-    log(f"[ingest] {len(ids)} unprocessed message(s) after {after}")
+    log(f"[ingest] {len(accts)} inbox(es): " +
+        ", ".join(f"{a['key']}({a['email'] or '?'})" for a in accts))
     conn = _connect()
     try:
-        # reply-to-kill: process any "kill 24, 25" replies to the briefing first
-        if commit:
-            try:
-                from ingest import reply_commands
-                reply_commands.process_replies(svc, conn, log=log)
-            except Exception as e:
-                log(f"[reply-cmd] error: {e}")
-            # engagement auto-promotion: any deal Ben has replied to is a pipeline deal
-            try:
-                from ingest import engagement
-                engagement.run(conn, svc, log=log)
-            except Exception as e:
-                log(f"[engage] error: {e}")
-        for mid in ids:
-            msg = gc.get_message(svc, mid)
-            bkey, path, cands = pipeline.extract_candidates(svc, msg, session)
-            s["messages"] += 1
-            if not cands:
-                s["no_listing"] += 1
-            for c in cands:
-                res = dedup.upsert(conn, c, source=pipeline.source_for(path),
-                                   raw_email_id=c.get("_thread_id"), session=session)
-                s["listings"] += 1
-                s[res["action"]] = s.get(res["action"], 0) + 1
-                if res.get("status") == "needs_review":
-                    s["needs_review"] += 1
+        for acct in accts:
+            svc = gc.service(acct["refresh_token"])
+            tag = acct["key"]
             if commit:
-                conn.commit()
-                if do_label:
-                    label_message(svc, mid, ing_label)
-                    s["labeled"] += 1
-            else:
-                conn.rollback()
+                # reply-to-kill: only the primary inbox receives briefing replies
+                if acct.get("primary"):
+                    try:
+                        from ingest import reply_commands
+                        reply_commands.process_replies(svc, conn, log=log)
+                    except Exception as e:
+                        log(f"[reply-cmd:{tag}] error: {e}")
+                # engagement auto-promotion: per-inbox (own sent mail, own threads)
+                try:
+                    from ingest import engagement
+                    engagement.run(conn, svc, log=log)
+                except Exception as e:
+                    log(f"[engage:{tag}] error: {e}")
+            ing_label = gc.ensure_label(svc, INGESTED_LABEL)
+            scan_query = acct.get("scan_query")
+            ids = unprocessed_ids(svc, after, scan_query=scan_query)
+            mode = f"scan-all ({scan_query})" if scan_query else f"label '{DEAL_FLOW_LABEL}'"
+            log(f"[ingest:{tag}] {len(ids)} unprocessed message(s) after {after} — {mode}")
+            for mid in ids:
+                msg = gc.get_message(svc, mid)
+                bkey, path, cands = pipeline.extract_candidates(
+                    svc, msg, session, allow_unknown=bool(scan_query))
+                s["messages"] += 1
+                if not cands:
+                    s["no_listing"] += 1
+                for c in cands:
+                    res = dedup.upsert(conn, c, source=pipeline.source_for(path),
+                                       raw_email_id=c.get("_thread_id"),
+                                       session=session, account=tag)
+                    s["listings"] += 1
+                    s[res["action"]] = s.get(res["action"], 0) + 1
+                    if res.get("status") == "needs_review":
+                        s["needs_review"] += 1
+                if commit:
+                    conn.commit()
+                    if do_label:
+                        label_message(svc, mid, ing_label)
+                        s["labeled"] += 1
+                else:
+                    conn.rollback()
         log(f"[ingest] done: {s}")
         return s
     finally:

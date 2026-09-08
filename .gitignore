@@ -3,6 +3,10 @@
 .env.*
 !.env.example
 
+# Railway variable dumps (contain DATABASE_URL password, API keys, OAuth secret)
+railway_vars.*
+railway-vars.*
+
 # Python
 __pycache__/
 *.py[cod]

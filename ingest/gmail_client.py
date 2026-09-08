@@ -27,17 +27,50 @@ def _load_env():
                 os.environ.setdefault(k.strip(), v.strip())
 
 
-def service():
+def service(refresh_token=None):
+    """Gmail client for one inbox. Pass an account's refresh_token to target that
+    inbox; omit it to use the primary GMAIL_REFRESH_TOKEN (backward compatible).
+    All accounts share the one OAuth client (GMAIL_CLIENT_ID/SECRET)."""
     _load_env()
     creds = Credentials(
         None,
-        refresh_token=os.environ["GMAIL_REFRESH_TOKEN"],
+        refresh_token=refresh_token or os.environ["GMAIL_REFRESH_TOKEN"],
         client_id=os.environ["GMAIL_CLIENT_ID"],
         client_secret=os.environ["GMAIL_CLIENT_SECRET"],
         token_uri=TOKEN_URI,
         scopes=SCOPES,
     )
     return build("gmail", "v1", credentials=creds, cache_discovery=False)
+
+
+def accounts():
+    """Every configured ingestion inbox, primary first.
+
+    - Primary: GMAIL_REFRESH_TOKEN (display email GMAIL_EMAIL, optional).
+    - Additional inboxes: any GMAIL_REFRESH_TOKEN_<KEY> env var, e.g.
+      GMAIL_REFRESH_TOKEN_RTP -> account key 'rtp' (email GMAIL_EMAIL_RTP).
+
+    Adding an inbox is purely an env-var change; no code edit. Backward compatible:
+    with only the primary token set, this returns exactly one account and the
+    ingest behaves exactly as the single-account version did."""
+    _load_env()
+    out = []
+    if os.environ.get("GMAIL_REFRESH_TOKEN"):
+        out.append({"key": "personal", "primary": True,
+                    "email": os.environ.get("GMAIL_EMAIL", ""),
+                    "refresh_token": os.environ["GMAIL_REFRESH_TOKEN"],
+                    "scan_query": os.environ.get("GMAIL_SCAN") or None})
+    for k, v in sorted(os.environ.items()):
+        m = re.match(r"^GMAIL_REFRESH_TOKEN_([A-Z0-9]+)$", k)
+        if m and v:
+            key = m.group(1)
+            out.append({"key": key.lower(), "primary": False,
+                        "email": os.environ.get(f"GMAIL_EMAIL_{key}", ""),
+                        "refresh_token": v,
+                        # scan_query set -> scan ALL matching mail (parser decides,
+                        # unknown senders included); unset -> Deal Flow label only.
+                        "scan_query": os.environ.get(f"GMAIL_SCAN_{key}") or None})
+    return out
 
 
 def label_id(svc, name):
@@ -72,6 +105,22 @@ def list_message_ids(svc, label_name, after=None, max_results=None):
             userId="me", labelIds=[lid], q=q, pageToken=page,
             maxResults=min(500, max_results or 500),
         ).execute()
+        out.extend(m["id"] for m in resp.get("messages", []))
+        page = resp.get("nextPageToken")
+        if not page or (max_results and len(out) >= max_results):
+            break
+    return out[:max_results] if max_results else out
+
+
+def list_message_ids_query(svc, query, after=None, max_results=None):
+    """List message ids matching an arbitrary Gmail search query (no label filter).
+    Used by scan-all inboxes, e.g. query='in:inbox -subject:\"RTP Deal Briefing\"'."""
+    q = f"({query}) after:{after}" if after else query
+    out, page = [], None
+    while True:
+        resp = svc.users().messages().list(
+            userId="me", q=q, pageToken=page,
+            maxResults=min(500, max_results or 500)).execute()
         out.extend(m["id"] for m in resp.get("messages", []))
         page = resp.get("nextPageToken")
         if not page or (max_results and len(out) >= max_results):

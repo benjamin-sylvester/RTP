@@ -270,7 +270,7 @@ def is_orphan(cand):
     return not _usable_address(cand) and not cand.get("external_id")
 
 
-def insert_listing(conn, cand, source, raw_email_id=None, session=None):
+def insert_listing(conn, cand, source, raw_email_id=None, session=None, account=None):
     cur = conn.cursor()
     lat, lon, method = geocode(cand.get("address"), cand.get("city"),
                                cand.get("state"), session)
@@ -290,8 +290,9 @@ def insert_listing(conn, cand, source, raw_email_id=None, session=None):
         """
         INSERT INTO listings (external_id, address, city, state, latitude, longitude,
             units, asking_price, price_per_unit, year_built, building_sf, status,
-            source, broker_name, broker_email, listing_date, raw_email_id, raw_data, notes)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s)
+            source, broker_name, broker_email, listing_date, raw_email_id, raw_data,
+            notes, account)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s)
         RETURNING id
         """,
         (str(cand["external_id"]) if cand.get("external_id") else None,
@@ -299,7 +300,7 @@ def insert_listing(conn, cand, source, raw_email_id=None, session=None):
          (cand.get("state") or "").strip(), lat, lon, units, ask_cents, ppu,
          cand.get("year_built"), cand.get("building_sf"), status, source,
          cand.get("broker_name"), cand.get("broker_email"), cand.get("listing_date"),
-         raw_email_id, json.dumps(raw, default=str), None))
+         raw_email_id, json.dumps(raw, default=str), None, account))
     return cur.fetchone()[0], status
 
 
@@ -350,8 +351,10 @@ def try_link_package(conn, cand):
 
 
 # ---------------------------------------------------------------- orchestration
-def upsert(conn, cand, source, raw_email_id=None, session=None):
-    """Returns dict describing the action taken."""
+def upsert(conn, cand, source, raw_email_id=None, session=None, account=None):
+    """Returns dict describing the action taken. `account` tags a NEW row with the
+    inbox it came in through; on an enrich (deal already known, possibly from
+    another inbox) the existing row keeps its original account."""
     link = try_link_package(conn, cand)
     if link:
         return {"action": "linked_package", "listing_id": None,
@@ -362,5 +365,5 @@ def upsert(conn, cand, source, raw_email_id=None, session=None):
         changed = enrich(conn, lid, cand, source)
         return {"action": "enriched", "listing_id": lid, "tier": tier,
                 "matched_on": detail, "changed": changed}
-    nid, status = insert_listing(conn, cand, source, raw_email_id, session)
+    nid, status = insert_listing(conn, cand, source, raw_email_id, session, account)
     return {"action": "inserted", "listing_id": nid, "status": status}
