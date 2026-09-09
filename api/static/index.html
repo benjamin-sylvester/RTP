@@ -3,45 +3,50 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Rising Tide Pipeline</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%230B2545'/%3E%3Cpath d='M12 62 C24 74 40 72 54 56 C68 40 84 39 92 48' stroke='white' stroke-width='5' stroke-linecap='round' fill='none'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 :root{
-  --bg:#e9edeb; --surface:#fff; --surface-2:#f4f7f5; --raise:0 1px 2px rgba(16,32,30,.06),0 8px 24px rgba(16,32,30,.05);
-  --ink:#10201e; --ink-2:#3b4a47; --muted:#6c7d79; --line:#dde4e1; --line-2:#cdd6d3;
-  --brand:#0f5c56; --brand-2:#14746c; --accent:#a9761f; --accent-soft:#f0e5cf;
-  --st-active:#1c8a5a; --st-comp:#3a6ea5; --st-passed:#93a3a0; --st-review:#bf8a24; --st-lost:#b0503f; --st-owned:#6a58a6;
-  --st-active-bg:#e4f2ea; --st-comp-bg:#e6eef7; --st-passed-bg:#eef2f0; --st-review-bg:#f7edd6; --st-lost-bg:#f6e6e2; --st-owned-bg:#ece7f6;
-  --font-display:'Fraunces',Georgia,serif; --font-sans:'IBM Plex Sans',system-ui,-apple-system,sans-serif;
+  --bg:#f5f5f2; --surface:#ffffff; --surface-2:#f0f0ec; --raise:0 1px 2px rgba(11,37,69,.05),0 8px 24px rgba(11,37,69,.06);
+  --ink:#14202e; --ink-2:#3a4655; --muted:#6B7280; --line:#e5e5e0; --line-2:#d7d7d0;
+  --brand:#0B2545; --brand-2:#1d3f6b; --accent:#B08D57; --accent-soft:#efe6d4;
+  --st-active:#1c7a4f; --st-comp:#3a6ea5; --st-passed:#9aa1ab; --st-review:#b0863c; --st-lost:#b0503f; --st-owned:#6a58a6;
+  --st-active-bg:#e3f1e9; --st-comp-bg:#e7eef7; --st-passed-bg:#f0f0ee; --st-review-bg:#f6ecd8; --st-lost-bg:#f6e6e2; --st-owned-bg:#ece7f6;
+  --font-display:'EB Garamond',Georgia,'Times New Roman',serif; --font-sans:'Inter',system-ui,-apple-system,Helvetica,Arial,sans-serif;
   --font-mono:'IBM Plex Mono',ui-monospace,monospace;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#0b1211; --surface:#121d1b; --surface-2:#16211f; --raise:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
-  --ink:#eaf1ee; --ink-2:#c3cfcb; --muted:#8fa19d; --line:#243532; --line-2:#2e413d;
-  --brand:#41b4a6; --brand-2:#5ccabb; --accent:#d5a24d; --accent-soft:#3a3016;
-  --st-active:#33a970; --st-comp:#5f92c6; --st-passed:#7f918d; --st-review:#dfa941; --st-lost:#d1725f; --st-owned:#9585cc;
-  --st-active-bg:#123024; --st-comp-bg:#152538; --st-passed-bg:#1b2725; --st-review-bg:#2e2612; --st-lost-bg:#31201c; --st-owned-bg:#211b33;
+  --bg:#0a1626; --surface:#0f2038; --surface-2:#15273f; --raise:0 1px 2px rgba(0,0,0,.35),0 10px 30px rgba(0,0,0,.4);
+  --ink:#e8eef6; --ink-2:#c2cede; --muted:#93a1b5; --line:#22374f; --line-2:#2c405a;
+  --brand:#7ea6d6; --brand-2:#9dbde6; --accent:#c9a367; --accent-soft:#332916;
+  --st-active:#37a56e; --st-comp:#6096cc; --st-passed:#8493a5; --st-review:#dca94a; --st-lost:#d1725f; --st-owned:#9585cc;
+  --st-active-bg:#123227; --st-comp-bg:#152a44; --st-passed-bg:#1b2838; --st-review-bg:#2e2814; --st-lost-bg:#31201c; --st-owned-bg:#211b33;
 }}
 :root[data-theme="dark"]{
-  --bg:#0b1211; --surface:#121d1b; --surface-2:#16211f; --raise:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
-  --ink:#eaf1ee; --ink-2:#c3cfcb; --muted:#8fa19d; --line:#243532; --line-2:#2e413d;
-  --brand:#41b4a6; --brand-2:#5ccabb; --accent:#d5a24d; --accent-soft:#3a3016;
-  --st-active:#33a970; --st-comp:#5f92c6; --st-passed:#7f918d; --st-review:#dfa941; --st-lost:#d1725f; --st-owned:#9585cc;
-  --st-active-bg:#123024; --st-comp-bg:#152538; --st-passed-bg:#1b2725; --st-review-bg:#2e2612; --st-lost-bg:#31201c; --st-owned-bg:#211b33;
+  --bg:#0a1626; --surface:#0f2038; --surface-2:#15273f; --raise:0 1px 2px rgba(0,0,0,.35),0 10px 30px rgba(0,0,0,.4);
+  --ink:#e8eef6; --ink-2:#c2cede; --muted:#93a1b5; --line:#22374f; --line-2:#2c405a;
+  --brand:#7ea6d6; --brand-2:#9dbde6; --accent:#c9a367; --accent-soft:#332916;
+  --st-active:#37a56e; --st-comp:#6096cc; --st-passed:#8493a5; --st-review:#dca94a; --st-lost:#d1725f; --st-owned:#9585cc;
+  --st-active-bg:#123227; --st-comp-bg:#152a44; --st-passed-bg:#1b2838; --st-review-bg:#2e2814; --st-lost-bg:#31201c; --st-owned-bg:#211b33;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-sans);font-size:14.5px;line-height:1.5;-webkit-font-smoothing:antialiased}
 .wrap{max-width:1160px;margin:0 auto;padding:0 20px}
 a{color:var(--brand-2);text-decoration:none}a:hover{text-decoration:underline}
 .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
-h1,h2,h3{margin:0;font-family:var(--font-display);font-weight:500;letter-spacing:-.01em}
+h1,h2,h3{margin:0;font-family:var(--font-display);font-weight:600;letter-spacing:-.005em}
 .num{font-variant-numeric:tabular-nums}
+.snap .v,.kpi .v,.metric .val,.modelgrid .m .v,.deal .name,.dhead h2,.deal .metric .val{font-variant-numeric:lining-nums tabular-nums}
 /* top bar */
 header{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--surface) 90%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
 .bar{display:flex;align-items:center;gap:22px;height:60px}
-.brand{display:flex;align-items:baseline;gap:9px;font-family:var(--font-display);font-weight:600;font-size:18px;color:var(--ink)}
-.brand .tide{color:var(--brand)} .brand .mark{width:8px;height:8px;border-radius:50%;background:var(--accent);align-self:center;box-shadow:0 0 0 3px var(--accent-soft)}
+.brand{display:flex;align-items:center;gap:11px;text-decoration:none}
+.brand .logo{width:30px;height:30px;flex:none} .brand .logo svg{width:100%;height:100%;display:block}
+.brand .wordmark{display:flex;flex-direction:column;line-height:1.04}
+.brand .wm{font-family:var(--font-display);font-weight:500;font-size:19px;color:var(--brand);letter-spacing:.01em}
+.brand .sub{font-family:var(--font-sans);font-weight:500;font-size:8px;letter-spacing:.19em;text-transform:uppercase;color:var(--muted);margin-top:2px}
 nav.tabs{display:flex;gap:2px;margin-left:auto}
 .tab{border:0;background:none;font:inherit;font-weight:500;color:var(--muted);padding:7px 13px;border-radius:8px;cursor:pointer}
 .tab:hover{color:var(--ink);background:var(--surface-2)} .tab[aria-selected="true"]{color:var(--brand);background:var(--surface-2)}
@@ -148,7 +153,7 @@ tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
 </head>
 <body>
 <header><div class="wrap bar">
-  <div class="brand"><span class="mark"></span>Rising&nbsp;<span class="tide">Tide</span>&nbsp;Partners</div>
+  <a class="brand" href="/"><span class="logo"><svg viewBox="0 0 100 100"><rect width="100" height="100" rx="3" fill="var(--brand)"/><path d="M12 62 C24 74 40 72 54 56 C68 40 84 39 92 48" stroke="var(--surface)" stroke-width="5" stroke-linecap="round" fill="none"/></svg></span><span class="wordmark"><span class="wm">Rising Tide Partners</span><span class="sub">Multifamily Real Estate</span></span></a>
   <nav class="tabs" role="tablist">
     <button class="tab" role="tab" data-panel="live" aria-selected="true">Live Pipeline</button>
     <button class="tab" role="tab" data-panel="deals" aria-selected="false">Deals</button>
