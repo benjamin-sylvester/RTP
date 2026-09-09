@@ -69,9 +69,13 @@ def sync_one(conn, lid, address, ref, log, mode="local", svc=None, dry=False):
         "SELECT model_stats FROM auto_underwriting WHERE listing_id=%s", (lid,)).fetchone()
     prior = (prior_row[0] or {}).get("canonical", {}) if prior_row and prior_row[0] else {}
 
+    um = res.get("unit_mix") or []
     show = ", ".join(f"{k}={_fmt(k,v)}" for k, v in flat.items())
     log(f"  #{lid} {address}  [{filename}]")
     log(f"       {show}")
+    if um:
+        log("       unit mix: " + ", ".join(f"{u['count']}× {u['unit_type']}"
+            + (f" @ ${u['avg_rent']}" if u.get('avg_rent') else "") for u in um))
     for k, v in flat.items():
         pv = prior.get(k)
         if pv is None:
@@ -82,7 +86,7 @@ def sync_one(conn, lid, address, ref, log, mode="local", svc=None, dry=False):
     if dry:
         return "dry"
 
-    stats = {"canonical": flat,
+    stats = {"canonical": flat, "unit_mix": um,
              "provenance": {k: f"{d['sheet']}!{d['cell']}" for k, d in res["canonical"].items()},
              "raw_count": len(res["raw"])}
     cols = {AU_MAP[k]: flat[k] for k in AU_MAP if k in flat}
@@ -107,6 +111,19 @@ def sync_one(conn, lid, address, ref, log, mode="local", svc=None, dry=False):
             "cap_rate=COALESCE(EXCLUDED.cap_rate, listing_financials.cap_rate), "
             "data_source='uw_model', confidence='high'",
             (lid, round(flat["noi"] * 100) if "noi" in flat else None, flat.get("in_place_cap")))
+    # unit mix from the model's rent roll (authoritative for the deal) -> unit_mix
+    # table; only replace when the model actually yielded a mix, so we never wipe
+    # an ingestion-parsed mix with nothing.
+    if um:
+        conn.execute("DELETE FROM unit_mix WHERE listing_id=%s", (lid,))
+        for u in um:
+            delta = None
+            if u.get("avg_rent") and u.get("market_rent"):
+                delta = round((u["market_rent"] - u["avg_rent"]) / u["avg_rent"], 4)
+            conn.execute(
+                "INSERT INTO unit_mix (listing_id, unit_type, count, avg_rent, market_rent, rent_delta_pct) "
+                "VALUES (%s,%s,%s,%s,%s,%s)",
+                (lid, u["unit_type"], u["count"], u.get("avg_rent"), u.get("market_rent"), delta))
     # log moved figures
     for k, v in flat.items():
         pv = prior.get(k)

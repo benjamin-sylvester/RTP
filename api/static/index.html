@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
 :root{
   --bg:#f5f5f2; --surface:#ffffff; --surface-2:#f0f0ec; --raise:0 1px 2px rgba(11,37,69,.05),0 8px 24px rgba(11,37,69,.06);
@@ -109,6 +110,12 @@ tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
 .empty{padding:26px;color:var(--muted);text-align:center}
 /* map */
 .mapcard{background:var(--surface);border:1px solid var(--line);border-radius:15px;box-shadow:var(--raise);padding:8px}
+#leafmap{height:560px;border-radius:11px;overflow:hidden;background:var(--surface-2);z-index:0}
+:root:not([data-theme="light"]) #leafmap .leaflet-tile-pane,[data-theme="dark"] #leafmap .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.92) contrast(.9)}
+.leaflet-container{font-family:var(--font-sans)!important;background:var(--surface-2)}
+.leaflet-popup-content{font-size:13px;line-height:1.5} .leaflet-popup-content b{font-family:var(--font-display);font-size:15px}
+:root:not([data-theme="light"]) .leaflet-popup-content-wrapper,:root:not([data-theme="light"]) .leaflet-popup-tip,[data-theme="dark"] .leaflet-popup-content-wrapper,[data-theme="dark"] .leaflet-popup-tip{background:var(--surface);color:var(--ink)}
+:root:not([data-theme="light"]) .leaflet-popup-content a,[data-theme="dark"] .leaflet-popup-content a{color:var(--brand-2)}
 .mapwrap{position:relative} svg.map{display:block;width:100%;height:auto}
 .legend{display:flex;gap:15px;flex-wrap:wrap;padding:11px 15px 7px} .legend .li{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2)} .legend .sw{width:11px;height:11px;border-radius:50%}
 .mdot{cursor:pointer} .tooltip{position:absolute;pointer-events:none;opacity:0;transform:translate(-50%,-120%);background:var(--ink);color:var(--surface);font-size:12px;padding:6px 9px;border-radius:8px;white-space:nowrap;z-index:5;transition:opacity .12s;box-shadow:0 6px 20px rgba(0,0,0,.25)}
@@ -205,7 +212,7 @@ tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
   <!-- MAP -->
   <section class="panel" id="map">
     <div class="section-head"><div><div class="eyebrow">Every tracked property · geocoded</div><h2>Footprint</h2></div><div class="note" id="map-note"></div></div>
-    <div class="mapcard"><div class="mapwrap" id="mapwrap"><div class="tooltip" id="mtip"></div></div><div class="legend" id="legend"></div></div>
+    <div class="mapcard"><div id="leafmap"></div><div class="legend" id="legend"></div></div>
   </section>
   <!-- ANALYTICS -->
   <section class="panel" id="stats">
@@ -227,7 +234,7 @@ tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
 <div id="login"><form onsubmit="return doLogin(event)"><h2>Rising Tide Pipeline</h2><div class="sub">Enter the dashboard password.</div>
   <input id="pw" type="password" placeholder="password" autofocus><button type="submit">Log in</button><div class="err" id="loginerr"></div></form></div>
 <div id="toast"></div>
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 const STATUS={underwriting:{c:'var(--st-active)',bg:'var(--st-active-bg)',label:'Underwriting'},lead:{c:'var(--st-active)',bg:'var(--st-active-bg)',label:'Lead'},
   loi_sent:{c:'var(--st-active)',bg:'var(--st-active-bg)',label:'LOI sent'},under_contract:{c:'var(--st-active)',bg:'var(--st-active-bg)',label:'Under contract'},
@@ -294,13 +301,13 @@ function renderLive(d){
         +`<div class="metric"><div class="k">Model</div><div class="val pend">not started</div></div>`;
       foot=`<span class="tag">UW model not started</span>`;
     }
-    const um=''; // unit mix comes from detail
+    const um=((x.model_stats&&x.model_stats.unit_mix)||[]).filter(u=>u.count).map(u=>`<span class="u"><b>${u.count}</b> ${u.unit_type}${u.avg_rent?` <span style="color:var(--muted)">$${u.avg_rent}</span>`:''}</span>`).join('');
     const contact=x.broker_name?`<span class="lbl">Broker </span>${x.broker_email?`<a href="mailto:${x.broker_email}" onclick="event.stopPropagation()">${x.broker_name}</a>`:x.broker_name}`:`<span class="lbl">Source </span>${x.source==='mls_export'?'MLS':'Broker email'}`;
     return `<article class="deal" onclick="openDeal('listing',${x.id})"><div class="stripe"></div><div class="body">
       <div class="deal-top"><div><div class="name">${x.address}</div>
         <div class="loc"><b>${x.city}, ${x.state}</b> · #${x.id} · via ${x.account==='rtp'?'RTP inbox':x.account==='personal'?'personal inbox':'MLS'}${tagline}</div></div>
         <span class="pill ${x.status}">${st.label}</span></div>
-      <div class="metrics">${metrics}</div>
+      <div class="metrics">${metrics}</div>${um?`<div class="umix">${um}</div>`:''}
       <div class="deal-foot"><div class="contact">${contact}</div>${foot}</div></div></article>`;
   }).join('');
   document.getElementById('live-note').textContent=P.length+' active';
@@ -339,28 +346,32 @@ function renderTable(){
 }
 let deb;document.querySelectorAll('#deals .filters input,#deals .filters select').forEach(el=>el.addEventListener('input',()=>{clearTimeout(deb);deb=setTimeout(loadDeals,250);}));
 
-/* ---- MAP ---- */
-async function loadMap(){if(CACHE.map){drawMap(CACHE.map);return;}try{const d=await(await api('/api/map')).json();CACHE.map=d.listings;drawMap(d.listings);}catch(e){}}
+/* ---- MAP (Leaflet — pan / zoom / clickable markers) ---- */
+let LMAP,LLAYER,LMARKERS=[];
+const isDark=()=>{const t=document.documentElement.getAttribute('data-theme');return t?t==='dark':matchMedia('(prefers-color-scheme:dark)').matches;};
+const tileURL=()=>'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+const resolveColor=v=>{const m=(v||'').match(/var\((--[\w-]+)\)/);return m?(getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim()||'#888'):(v||'#888');};
+async function loadMap(){
+  if(!CACHE.map){try{CACHE.map=(await(await api('/api/map')).json()).listings;}catch(e){return;}}
+  drawMap(CACHE.map);
+}
 function drawMap(listings){
-  const pts=listings.filter(r=>r.latitude&&r.longitude).map(r=>({...r,lat:+r.latitude,lng:+r.longitude}));
-  if(!pts.length)return;
-  const W=880,H=560,pad=52;const lats=pts.map(p=>p.lat),lngs=pts.map(p=>p.lng);
-  const mLa=Math.min(...lats),xLa=Math.max(...lats),mLo=Math.min(...lngs),xLo=Math.max(...lngs);
-  const sx=lo=>pad+(lo-mLo)/((xLo-mLo)||1)*(W-2*pad),sy=la=>pad+(xLa-la)/((xLa-mLa)||1)*(H-2*pad);
-  const seen={};pts.forEach(p=>{const k=p.lat.toFixed(3)+','+p.lng.toFixed(3);const n=seen[k]=(seen[k]||0)+1;const a=n*1.9;p.jx=n>1?Math.cos(a)*(3+n):0;p.jy=n>1?Math.sin(a)*(3+n):0;});
-  const order=['comp_only','passed','needs_review','lost','lead','underwriting'];pts.sort((a,b)=>order.indexOf(a.status)-order.indexOf(b.status));
-  const cities=[['Manchester',42.99,-71.46],['Rochester',43.30,-70.98],['Nashua',42.76,-71.46],['Dover',43.19,-70.88],['Laconia',43.53,-71.46],['Fall River',41.69,-71.15],['New Bedford',41.63,-70.93],['Boston',42.34,-71.06],['Worcester',42.27,-71.81]];
-  let s=`<svg class="map" viewBox="0 0 ${W} ${H}" role="img" aria-label="Map of tracked properties"><rect x="1" y="1" width="${W-2}" height="${H-2}" rx="12" fill="none" stroke="var(--line)"/>`;
-  cities.forEach(([nm,la,lo])=>{if(la<mLa-.2||la>xLa+.2||lo<mLo-.2||lo>xLo+.2)return;s+=`<text x="${sx(lo)+7}" y="${sy(la)-6}" font-family="var(--font-mono)" font-size="11" fill="var(--muted)" opacity=".8">${nm}</text>`;});
-  const active=st=>['underwriting','lead','loi_sent','under_contract'].includes(st);
-  pts.forEach(p=>{const st=STATUS[p.status]||STATUS.comp_only,ac=active(p.status);const x=(sx(p.lng)+p.jx).toFixed(1),y=(sy(p.lat)+p.jy).toFixed(1);const r=ac?7.5:4.2;
-    s+=`<circle class="mdot" cx="${x}" cy="${y}" r="${r}" fill="${st.c}" fill-opacity="${ac?1:.7}" stroke="${ac?'var(--accent)':'var(--surface)'}" stroke-width="${ac?2.2:1}" data-t="${(p.address||'—').replace(/"/g,'')}|${p.city} ${p.state}|${p.units?p.units+'u':'—'} ${st.label}"></circle>`;
-    if(p.status==='underwriting')s+=`<text x="${x}" y="${(+y-12)}" text-anchor="middle" font-family="var(--font-display)" font-weight="600" font-size="12" fill="var(--ink)">${p.units||''}u</text>`;});
-  s+=`</svg>`;const wrap=document.getElementById('mapwrap');wrap.querySelectorAll('svg').forEach(e=>e.remove());wrap.insertAdjacentHTML('afterbegin',s);
-  const tip=document.getElementById('mtip');
-  wrap.querySelectorAll('.mdot').forEach(c=>{c.addEventListener('mousemove',e=>{const[a,b,d]=c.dataset.t.split('|');const rc=wrap.getBoundingClientRect();tip.style.left=(e.clientX-rc.left)+'px';tip.style.top=(e.clientY-rc.top)+'px';tip.innerHTML=`<b>${a}</b><br><span class="mono" style="opacity:.85">${b} · ${d}</span>`;tip.style.opacity=1;});c.addEventListener('mouseleave',()=>tip.style.opacity=0);});
-  document.getElementById('legend').innerHTML=Object.entries(STATUS).filter(([k])=>k!=='lead'&&k!=='loi_sent'&&k!=='under_contract').map(([k,st])=>{const n=pts.filter(p=>p.status===k).length;return `<span class="li"><span class="sw" style="background:${st.c}"></span>${st.label} <b class="mono" style="color:var(--muted)">${n}</b></span>`;}).join('');
+  const el=document.getElementById('leafmap'),pts=listings.filter(r=>r.latitude&&r.longitude);
+  if(typeof L==='undefined'){el.innerHTML='<div class="mut" style="padding:24px">Map library did not load.</div>';return;}
+  if(!LMAP){LMAP=L.map(el,{scrollWheelZoom:true}).setView([42.6,-71.4],8);window.__map=LMAP;
+    new ResizeObserver(()=>{if(!LMAP)return;LMAP.invalidateSize();if(LMAP._pb&&el.clientWidth>0){LMAP.fitBounds(LMAP._pb,{padding:[30,30],maxZoom:12});LMAP._pb=null;}}).observe(el);}
+  if(LLAYER)LMAP.removeLayer(LLAYER);
+  LLAYER=L.tileLayer(tileURL(),{subdomains:'abc',maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(LMAP);
+  LMARKERS.forEach(m=>LMAP.removeLayer(m));LMARKERS=[];
+  const active=st=>['underwriting','lead','loi_sent','under_contract'].includes(st),bounds=[];
+  pts.forEach(p=>{const st=STATUS[p.status]||STATUS.comp_only,col=resolveColor(st.c),ac=active(p.status);
+    const m=L.circleMarker([+p.latitude,+p.longitude],{radius:ac?8:5,color:'#ffffff',weight:1.2,fillColor:col,fillOpacity:.9});
+    m.bindPopup(`<b>${p.address||'—'}</b><br>${p.city} ${p.state} · ${p.units||'?'}u · ${st.label}${p.price_per_unit?' · '+money(p.price_per_unit)+'/unit':''}<br><a href="#" onclick="openDeal('listing',${p.id});return false;">open deal &rarr;</a>`);
+    m.addTo(LMAP);LMARKERS.push(m);bounds.push([+p.latitude,+p.longitude]);});
+  document.getElementById('legend').innerHTML=Object.entries(STATUS).filter(([k])=>!['lead','loi_sent','under_contract'].includes(k)).map(([k,st])=>{const n=pts.filter(p=>p.status===k).length;return `<span class="li"><span class="sw" style="background:${st.c}"></span>${st.label} <b class="mono" style="color:var(--muted)">${n}</b></span>`;}).join('');
   document.getElementById('map-note').textContent=pts.length+' of '+listings.length+' geocoded';
+  LMAP._pb=bounds.length?bounds:null;
+  setTimeout(()=>{if(!LMAP)return;LMAP.invalidateSize();if(LMAP._pb&&el.clientWidth>0){LMAP.fitBounds(LMAP._pb,{padding:[30,30],maxZoom:12});LMAP._pb=null;}},220);
 }
 
 /* ---- ANALYTICS (cross-filtered) ---- */
