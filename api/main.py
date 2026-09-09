@@ -133,7 +133,7 @@ def pipeline(_auth=Depends(require_auth)):
         "  au.implied_cap_current, au.implied_cap_stabilized, au.score, au.tier "
         "FROM listings l LEFT JOIN auto_underwriting au ON au.listing_id = l.id "
         "WHERE l.status IN ('underwriting','loi_sent','under_contract','lead') "
-        "  AND l.package_id IS NULL "
+        "  AND l.package_id IS NULL AND l.merged_into_id IS NULL "
         "ORDER BY CASE l.status WHEN 'under_contract' THEN 0 WHEN 'loi_sent' THEN 1 "
         "         WHEN 'underwriting' THEN 2 ELSE 3 END, l.units DESC NULLS LAST")
     return {"count": len(rows), "deals": rows}
@@ -151,7 +151,7 @@ def map_data(_auth=Depends(require_auth)):
         "FROM listings l "
         "LEFT JOIN listing_financials lf ON lf.listing_id = l.id "
         "LEFT JOIN auto_underwriting au ON au.listing_id = l.id "
-        "WHERE l.package_id IS NULL")
+        "WHERE l.package_id IS NULL AND l.merged_into_id IS NULL")
     return {"count": len(rows), "listings": rows}
 
 
@@ -208,6 +208,8 @@ def deal_comps(kind: str, deal_id: int, radius_miles: float = 10, limit: int = 2
                       ROUND(haversine_miles(%s::numeric, %s::numeric, latitude, longitude), 2) AS miles
                FROM listings
                WHERE latitude IS NOT NULL AND id <> %s
+                 AND merged_into_id IS NULL AND status <> 'needs_review'
+                 AND COALESCE(address,'') NOT IN ('Unknown','')
                  AND haversine_miles(%s::numeric, %s::numeric, latitude, longitude) <= %s
                ORDER BY miles LIMIT %s""",
             (lat, lon, deal_id if kind == "listing" else -1, lat, lon, radius_miles, limit))
@@ -215,7 +217,9 @@ def deal_comps(kind: str, deal_id: int, radius_miles: float = 10, limit: int = 2
     else:  # no coords (e.g. package) -> same market
         rows = db.query(
             "SELECT id, address, city, state, units, asking_price, price_per_unit, status "
-            "FROM listings WHERE lower(city)=lower(%s) AND id <> %s ORDER BY asking_price DESC LIMIT %s",
+            "FROM listings WHERE lower(city)=lower(%s) AND id <> %s "
+            "AND merged_into_id IS NULL AND status <> 'needs_review' "
+            "AND COALESCE(address,'') NOT IN ('Unknown','') ORDER BY asking_price DESC LIMIT %s",
             (market, deal_id if kind == "listing" else -1, limit))
         basis = f"same market ({market})"
     return {"deal_id": deal_id, "kind": kind, "basis": basis, "count": len(rows), "comps": rows}
