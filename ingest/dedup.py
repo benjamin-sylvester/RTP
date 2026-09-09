@@ -372,6 +372,38 @@ def try_link_package(conn, cand):
     return None
 
 
+def name_match(conn, cand):
+    """Merge tier (d) — NAME match for addressless property-name candidates.
+    A bare property name like 'Lakeside Landing' has no house number, so tiers b/c
+    can miss it and it becomes an orphan duplicate. If the candidate is such a name,
+    look in the same city for an existing (non-merged) listing whose name matches —
+    normalized-equal, one contained in the other, or the name already recorded in
+    that listing's address/notes. Conservative: only fires for addressless names of
+    >= 6 alnum chars, so it never overrides the precise address tiers or collapses
+    two distinct street addresses. Returns (listing_id, detail) or (None, None)."""
+    name = (cand.get("address") or "").strip()
+    city = (cand.get("city") or "").strip()
+    if not name or not city or _house_num(name) or _blank(name):
+        return None, None
+    key = _norm_addr(name)
+    if len(key) < 6:
+        return None, None
+    cur = conn.cursor()
+    rows = cur.execute(
+        "SELECT id, address, notes FROM listings "
+        "WHERE lower(city)=lower(%s) AND merged_into_id IS NULL", (city,)).fetchall()
+    for lid, ex_addr, notes in rows:
+        exk = _norm_addr(ex_addr or "")
+        blob = _norm_addr((ex_addr or "") + " " + (notes or ""))
+        contained = len(exk) >= 6 and (exk in key or key in exk)
+        # a shared 10+ char run (in the existing name or its notes) catches variants
+        # like 'Lakeside Landing' vs 'Lakeside Landing Apartments'
+        shared = key in blob or (len(key) >= 10 and any(key[i:i + 10] in blob for i in range(len(key) - 9)))
+        if exk == key or contained or shared:
+            return lid, f"name '{name}' -> #{lid}"
+    return None, None
+
+
 # ---------------------------------------------------------------- orchestration
 def upsert(conn, cand, source, raw_email_id=None, session=None, account=None):
     """Returns dict describing the action taken. `account` tags a NEW row with the
@@ -388,6 +420,10 @@ def upsert(conn, cand, source, raw_email_id=None, session=None, account=None):
                 "package_id": link["package_id"], "matched_on": f"MLS#{link['mls']}",
                 "changed": link["updated"]}
     lid, tier, detail = find_match(conn, cand)
+    if not lid:  # tier (d): addressless property-name match -> merge into the deal
+        lid, ndetail = name_match(conn, cand)
+        if lid:
+            tier, detail = "d:name", ndetail
     if lid:
         changed = enrich(conn, lid, cand, source)
         return {"action": "enriched", "listing_id": lid, "tier": tier,
