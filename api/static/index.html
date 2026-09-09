@@ -49,7 +49,8 @@ nav.tabs{display:flex;gap:2px;margin-left:auto}
 .iconbtn:hover{color:var(--ink);border-color:var(--brand)}
 main{padding:26px 0 70px}
 .eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);font-weight:500}
-.section-head{display:flex;align-items:baseline;justify-content:space-between;gap:14px;margin:0 0 16px}
+.section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin:0 0 16px}
+.section-head .note{padding-bottom:3px}
 .section-head h2{font-size:22px} .note{font-size:12.5px;color:var(--muted)}
 .panel{display:none} .panel.on{display:block;animation:rise .35s ease both}
 @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -90,7 +91,7 @@ main{padding:26px 0 70px}
 .tablecard{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:var(--raise)}
 table{width:100%;border-collapse:collapse} .tscroll{overflow-x:auto}
 th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--line);white-space:nowrap}
-th{position:sticky;top:60px;background:var(--surface-2);font-family:var(--font-mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);cursor:pointer;user-select:none;font-weight:500}
+th{position:sticky;top:0;z-index:1;background:var(--surface-2);font-family:var(--font-mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);cursor:pointer;user-select:none;font-weight:500;box-shadow:0 1px 0 var(--line)}
 th.sorted::after{content:" ▾";color:var(--muted)} th.asc::after{content:" ▴"}
 td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
