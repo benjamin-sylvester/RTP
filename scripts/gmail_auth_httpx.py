@@ -40,7 +40,8 @@ ENV = ROOT / ".env"
 AUTH_URI = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URI = "https://oauth2.googleapis.com/token"
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify",
-          "https://www.googleapis.com/auth/gmail.send"]
+          "https://www.googleapis.com/auth/gmail.send",
+          "https://www.googleapis.com/auth/drive.readonly"]
 
 
 def upsert_env(updates):
