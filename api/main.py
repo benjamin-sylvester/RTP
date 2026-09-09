@@ -119,6 +119,33 @@ def list_deals(
         "sort": sort if sort in SORTABLE else "default"}, "deals": rows}
 
 
+@app.get("/api/pipeline")
+def pipeline(_auth=Depends(require_auth)):
+    """Active deals with their synced UW-model figures — feeds the Live tab cards."""
+    rows = db.query(
+        "SELECT l.id, l.address, l.city, l.state, l.units, l.asking_price, l.price_per_unit, "
+        "  l.year_built, l.status, l.source, l.broker_name, l.broker_email, l.account, "
+        "  l.drive_folder_id, l.latitude, l.longitude, "
+        "  au.model_file, au.model_version, au.model_synced_at, au.model_stats, "
+        "  au.implied_cap_current, au.implied_cap_stabilized, au.score, au.tier "
+        "FROM listings l LEFT JOIN auto_underwriting au ON au.listing_id = l.id "
+        "WHERE l.status IN ('underwriting','loi_sent','under_contract','lead') "
+        "  AND l.package_id IS NULL "
+        "ORDER BY CASE l.status WHEN 'under_contract' THEN 0 WHEN 'loi_sent' THEN 1 "
+        "         WHEN 'underwriting' THEN 2 ELSE 3 END, l.units DESC NULLS LAST")
+    return {"count": len(rows), "deals": rows}
+
+
+@app.get("/api/map")
+def map_data(_auth=Depends(require_auth)):
+    """Every tracked property (lite) — feeds the Map + Stats tabs."""
+    rows = db.query(
+        "SELECT id, address, city, state, units, price_per_unit, asking_price, status, "
+        "  account, source, year_built, latitude, longitude "
+        "FROM listings WHERE package_id IS NULL")
+    return {"count": len(rows), "listings": rows}
+
+
 @app.get("/api/deals/{kind}/{deal_id}")
 def deal_detail(kind: str, deal_id: int, _auth=Depends(require_auth)):
     board = db.one("SELECT * FROM v_deal_board WHERE deal_kind=%s AND deal_id=%s",

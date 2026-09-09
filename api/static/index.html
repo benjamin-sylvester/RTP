@@ -2,377 +2,432 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RTP Deal Dashboard</title>
+<title>Rising Tide Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-  :root{--ink:#1a1a1a;--mut:#777;--line:#e7e7e7;--bg:#fafafa;--pri:#0b7;--wat:#e90;--pas:#999}
-  *{box-sizing:border-box}
-  body{margin:0;font:14px/1.4 system-ui,-apple-system,Segoe UI,Arial;color:var(--ink);background:var(--bg)}
-  header{display:flex;align-items:baseline;gap:12px;padding:14px 18px;background:#fff;border-bottom:1px solid var(--line)}
-  header h1{font-size:17px;margin:0}
-  header .meta{color:var(--mut);font-size:13px}
-  header .sp{flex:1}
-  header button{font-size:12px;color:var(--mut);background:none;border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer}
-  .filters{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:10px 18px;background:#fff;border-bottom:1px solid var(--line)}
-  .filters label{font-size:12px;color:var(--mut);display:flex;flex-direction:column;gap:2px}
-  .filters input,.filters select{font:13px system-ui;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:#fff}
-  .filters input[type=number]{width:64px}
-  .toggles{display:flex;gap:12px;align-items:center}
-  .toggles label{flex-direction:row;align-items:center;gap:4px;cursor:pointer}
-  table{width:100%;border-collapse:collapse;background:#fff}
-  th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
-  th{position:sticky;top:0;background:#fff;font-size:12px;color:var(--mut);cursor:pointer;user-select:none;font-weight:600}
-  th.sorted::after{content:" ▾";color:#bbb}
-  th.asc::after{content:" ▴"}
-  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
-  tbody tr{cursor:pointer}
-  tbody tr:hover{background:#f5f9ff}
-  a.addr{color:var(--ink);text-decoration:none;border-bottom:1px dotted #bbb}
-  a.addr:hover{color:#0848c4}
-  .badge{font-size:11px;font-weight:700;color:#fff;padding:2px 8px;border-radius:10px}
-  .Priority{background:var(--pri)}.Watch{background:var(--wat)}.Pass{background:var(--pas)}
-  .stat{font-size:11px;color:#555;background:#eee;border-radius:10px;padding:2px 8px}
-  .stat.lead{background:#dff5ea;color:#067}.stat.underwriting{background:#e6efff;color:#249}
-  .stat.loi_sent{background:#ece0ff;color:#639}.stat.under_contract{background:#d6f0df;color:#075}
-  .stat.lost{background:#fde3e3;color:#a33}.stat.passed{background:#eee;color:#999}
-  .stat.needs_review{background:#fff0d6;color:#a60}.stat.comp_only{background:#f3f3f3;color:#999}
-  .actions{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 16px}
-  .actions button{font-size:12px;padding:5px 11px;border:1px solid var(--line);border-radius:7px;background:#fff;cursor:pointer}
-  .actions button:hover{background:#eef4ff;border-color:#bcd}
-  .actions button.danger:hover{background:#fde8e8;border-color:#e9b}
-  .actions button.ok{color:#067;font-weight:600}
-  .empty{padding:30px;color:var(--mut);text-align:center}
-  /* login */
-  #login{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#0006}
-  #login form{background:#fff;padding:26px;border-radius:12px;box-shadow:0 10px 40px #0003;display:flex;flex-direction:column;gap:10px;width:280px}
-  #login h2{margin:0 0 4px;font-size:16px}
-  #login input{padding:8px;border:1px solid var(--line);border-radius:7px;font-size:14px}
-  #login button{padding:8px;border:0;border-radius:7px;background:#0b7;color:#fff;font-weight:600;cursor:pointer}
-  #login .err{color:#c33;font-size:12px;min-height:14px}
-  #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;transition:.2s;pointer-events:none}
-  /* detail */
-  #detail{max-width:1000px;margin:0 auto;padding:18px}
-  #detail .back{display:inline-block;margin-bottom:12px;color:#0848c4;text-decoration:none;font-size:13px;cursor:pointer}
-  #detail .dhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:2px}
-  #detail .dhead h2{margin:0;font-size:20px}
-  #detail .dsub{color:var(--mut);font-size:14px;margin-bottom:8px}
-  #detail .contact{font-size:14px;margin-bottom:14px}
-  #detail .contact a{color:#0848c4;text-decoration:none}
-  #detail .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-  @media(max-width:760px){#detail .grid{grid-template-columns:1fr}}
-  .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 16px}
-  .card h3{margin:0 0 10px;font-size:13px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
-  .card.wide{grid-column:1/-1}
-  .kv{display:flex;justify-content:space-between;gap:10px;padding:3px 0;font-size:13px;border-bottom:1px solid #f3f3f3}
-  .kv:last-child{border-bottom:0}
-  .kv .k{color:var(--mut)} .kv .v{font-variant-numeric:tabular-nums}
-  .mut{color:var(--mut)}
-  .bul{margin:0;padding-left:18px;font-size:14px;line-height:1.6}
-  .comp{display:grid;grid-template-columns:46px 1fr auto;gap:8px;font-size:13px;padding:4px 0;border-bottom:1px solid #f3f3f3}
-  .comp .mi{color:var(--mut);font-variant-numeric:tabular-nums}
-  .bar{display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0}
-  .bar .lab{width:150px;color:#444} .bar .track{flex:1;height:7px;background:#eee;border-radius:4px;overflow:hidden}
-  .bar .fill{height:100%;background:#0b7} .bar .pts{width:54px;text-align:right;font-variant-numeric:tabular-nums;color:#555}
-  .bar .det{flex-basis:100%;color:var(--mut);font-size:11px;padding-left:150px;margin-top:-2px}
-  .htbl{width:100%;border-collapse:collapse;font-size:13px}
-  .htbl td,.htbl th{text-align:left;padding:5px 8px;border-bottom:1px solid #f1f1f1;white-space:nowrap}
-  .htbl th{color:var(--mut);font-weight:600;font-size:12px}
-  .cut{color:#c33;font-weight:600} .rise{color:#888}
-  .flag-ok{color:#0a7} .flag-no{color:#c33}
+:root{
+  --bg:#e9edeb; --surface:#fff; --surface-2:#f4f7f5; --raise:0 1px 2px rgba(16,32,30,.06),0 8px 24px rgba(16,32,30,.05);
+  --ink:#10201e; --ink-2:#3b4a47; --muted:#6c7d79; --line:#dde4e1; --line-2:#cdd6d3;
+  --brand:#0f5c56; --brand-2:#14746c; --accent:#a9761f; --accent-soft:#f0e5cf;
+  --st-active:#1c8a5a; --st-comp:#3a6ea5; --st-passed:#93a3a0; --st-review:#bf8a24; --st-lost:#b0503f;
+  --st-active-bg:#e4f2ea; --st-comp-bg:#e6eef7; --st-passed-bg:#eef2f0; --st-review-bg:#f7edd6; --st-lost-bg:#f6e6e2;
+  --font-display:'Fraunces',Georgia,serif; --font-sans:'IBM Plex Sans',system-ui,-apple-system,sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0b1211; --surface:#121d1b; --surface-2:#16211f; --raise:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
+  --ink:#eaf1ee; --ink-2:#c3cfcb; --muted:#8fa19d; --line:#243532; --line-2:#2e413d;
+  --brand:#41b4a6; --brand-2:#5ccabb; --accent:#d5a24d; --accent-soft:#3a3016;
+  --st-active:#33a970; --st-comp:#5f92c6; --st-passed:#7f918d; --st-review:#dfa941; --st-lost:#d1725f;
+  --st-active-bg:#123024; --st-comp-bg:#152538; --st-passed-bg:#1b2725; --st-review-bg:#2e2612; --st-lost-bg:#31201c;
+}}
+:root[data-theme="dark"]{
+  --bg:#0b1211; --surface:#121d1b; --surface-2:#16211f; --raise:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
+  --ink:#eaf1ee; --ink-2:#c3cfcb; --muted:#8fa19d; --line:#243532; --line-2:#2e413d;
+  --brand:#41b4a6; --brand-2:#5ccabb; --accent:#d5a24d; --accent-soft:#3a3016;
+  --st-active:#33a970; --st-comp:#5f92c6; --st-passed:#7f918d; --st-review:#dfa941; --st-lost:#d1725f;
+  --st-active-bg:#123024; --st-comp-bg:#152538; --st-passed-bg:#1b2725; --st-review-bg:#2e2612; --st-lost-bg:#31201c;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-sans);font-size:14.5px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1160px;margin:0 auto;padding:0 20px}
+a{color:var(--brand-2);text-decoration:none}a:hover{text-decoration:underline}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+h1,h2,h3{margin:0;font-family:var(--font-display);font-weight:500;letter-spacing:-.01em}
+.num{font-variant-numeric:tabular-nums}
+/* top bar */
+header{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--surface) 90%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.bar{display:flex;align-items:center;gap:22px;height:60px}
+.brand{display:flex;align-items:baseline;gap:9px;font-family:var(--font-display);font-weight:600;font-size:18px;color:var(--ink)}
+.brand .tide{color:var(--brand)} .brand .mark{width:8px;height:8px;border-radius:50%;background:var(--accent);align-self:center;box-shadow:0 0 0 3px var(--accent-soft)}
+nav.tabs{display:flex;gap:2px;margin-left:auto}
+.tab{border:0;background:none;font:inherit;font-weight:500;color:var(--muted);padding:7px 13px;border-radius:8px;cursor:pointer}
+.tab:hover{color:var(--ink);background:var(--surface-2)} .tab[aria-selected="true"]{color:var(--brand);background:var(--surface-2)}
+.iconbtn{border:1px solid var(--line-2);background:var(--surface);color:var(--muted);height:33px;padding:0 11px;border-radius:8px;cursor:pointer;font-size:13px;display:inline-grid;place-items:center}
+.iconbtn:hover{color:var(--ink);border-color:var(--brand)}
+main{padding:26px 0 70px}
+.eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.section-head{display:flex;align-items:baseline;justify-content:space-between;gap:14px;margin:0 0 16px}
+.section-head h2{font-size:22px} .note{font-size:12.5px;color:var(--muted)}
+.panel{display:none} .panel.on{display:block;animation:rise .35s ease both}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.panel.on{animation:none}}
+/* snapshot + cards */
+.snapshot{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:22px}
+.snap{flex:1;min-width:140px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.snap .k{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.snap .v{font-family:var(--font-display);font-size:25px;font-weight:500;margin-top:4px}
+.deals{display:grid;gap:16px}
+.deal{background:var(--surface);border:1px solid var(--line);border-radius:15px;box-shadow:var(--raise);overflow:hidden;display:grid;grid-template-columns:5px 1fr;cursor:pointer}
+.deal:hover{border-color:var(--brand)} .deal .stripe{background:var(--st-active)} .deal .body{padding:18px 20px}
+.deal-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.deal .name{font-family:var(--font-display);font-size:23px;font-weight:600;line-height:1.15}
+.deal .loc{color:var(--muted);margin-top:3px;font-size:13.5px} .deal .loc b{color:var(--ink-2);font-weight:500}
+.tagline{display:block;margin-top:3px;font-size:12.5px;color:var(--accent);font-style:italic}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;font-family:var(--font-mono);letter-spacing:.04em;text-transform:uppercase;padding:5px 11px;border-radius:999px;white-space:nowrap}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill.underwriting,.pill.lead,.pill.loi_sent,.pill.under_contract{color:var(--st-active);background:var(--st-active-bg)}
+.pill.comp_only{color:var(--st-comp);background:var(--st-comp-bg)} .pill.passed,.pill.lost{color:var(--st-passed);background:var(--st-passed-bg)}
+.pill.needs_review{color:var(--st-review);background:var(--st-review-bg)}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-top:16px}
+.metric{background:var(--surface);padding:12px 14px} .metric .k{font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.metric .val{font-family:var(--font-display);font-size:20px;font-weight:500;margin-top:3px} .metric .val.pend{font-family:var(--font-sans);font-size:12.5px;color:var(--muted);font-style:italic}
+.deal-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px;padding-top:13px;border-top:1px solid var(--line)}
+.contact{font-size:13px;color:var(--ink-2)} .contact .lbl{color:var(--muted)}
+.tag{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);border:1px solid var(--line-2);padding:3px 8px;border-radius:6px}
+.tag.src{color:var(--brand);border-color:color-mix(in srgb,var(--brand) 45%,transparent)}
+.umix{display:flex;gap:7px;flex-wrap:wrap;margin-top:13px}
+.umix .u{font-family:var(--font-mono);font-size:11.5px;background:var(--surface-2);border:1px solid var(--line);border-radius:7px;padding:4px 8px;color:var(--ink-2)} .umix .u b{color:var(--brand)}
+.callout{margin-top:18px;background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;padding:12px 15px;font-size:13px;color:var(--ink-2)} .callout b{color:var(--ink)}
+/* filters + table */
+.filters{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-bottom:14px}
+.filters label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:2px}
+.filters input,.filters select{font:13px var(--font-sans);padding:5px 7px;border:1px solid var(--line-2);border-radius:7px;background:var(--surface);color:var(--ink)}
+.filters input[type=number]{width:62px}
+.toggles{display:flex;gap:12px;align-items:center;flex-wrap:wrap} .toggles label{flex-direction:row;align-items:center;gap:5px;cursor:pointer}
+.tablecard{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:var(--raise)}
+table{width:100%;border-collapse:collapse} .tscroll{overflow-x:auto}
+th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{position:sticky;top:60px;background:var(--surface-2);font-family:var(--font-mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);cursor:pointer;user-select:none;font-weight:500}
+th.sorted::after{content:" ▾";color:var(--muted)} th.asc::after{content:" ▴"}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
+.stat{font-size:11px;font-weight:500;font-family:var(--font-mono);padding:3px 8px;border-radius:8px}
+.stat.lead,.stat.underwriting,.stat.loi_sent,.stat.under_contract{background:var(--st-active-bg);color:var(--st-active)}
+.stat.comp_only{background:var(--st-comp-bg);color:var(--st-comp)} .stat.passed,.stat.lost{background:var(--st-passed-bg);color:var(--st-passed)}
+.stat.needs_review{background:var(--st-review-bg);color:var(--st-review)}
+.badge{font-size:10.5px;font-weight:600;font-family:var(--font-mono);padding:3px 8px;border-radius:8px;color:#fff}
+.badge.Priority{background:var(--st-active)} .badge.Watch{background:var(--st-review)} .badge.Pass{background:var(--st-passed)}
+.empty{padding:26px;color:var(--muted);text-align:center}
+/* map */
+.mapcard{background:var(--surface);border:1px solid var(--line);border-radius:15px;box-shadow:var(--raise);padding:8px}
+.mapwrap{position:relative} svg.map{display:block;width:100%;height:auto}
+.legend{display:flex;gap:15px;flex-wrap:wrap;padding:11px 15px 7px} .legend .li{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2)} .legend .sw{width:11px;height:11px;border-radius:50%}
+.mdot{cursor:pointer} .tooltip{position:absolute;pointer-events:none;opacity:0;transform:translate(-50%,-120%);background:var(--ink);color:var(--surface);font-size:12px;padding:6px 9px;border-radius:8px;white-space:nowrap;z-index:5;transition:opacity .12s;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+[data-theme="dark"] .tooltip,:root:not([data-theme="light"]) .tooltip{background:#04100e}
+/* stats */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:13px;margin-bottom:26px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:17px 18px}
+.kpi .k{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.kpi .v{font-family:var(--font-display);font-size:30px;font-weight:500;margin-top:5px;line-height:1} .kpi .sub{font-size:12px;color:var(--muted);margin-top:5px}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:18px} @media(max-width:760px){.charts{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}}
+.chartcard{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:17px 19px} .chartcard h3{font-size:15px;margin-bottom:2px} .chartcard .sub{font-size:12px;color:var(--muted);margin-bottom:14px}
+.rows{display:grid;gap:9px} .row{display:grid;grid-template-columns:100px 1fr auto;align-items:center;gap:11px} .row .rl{font-size:12.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.track{height:11px;background:var(--surface-2);border-radius:6px;overflow:hidden} .fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--brand),var(--brand-2))} .row .rv{font-family:var(--font-mono);font-size:12px;color:var(--ink-2);text-align:right}
+.statusbar{display:flex;height:15px;border-radius:8px;overflow:hidden;border:1px solid var(--line)} .statusbar .seg{height:100%}
+.statuskey{display:flex;gap:13px;flex-wrap:wrap;margin-top:11px} .statuskey .li{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2)} .statuskey .li .sw{width:10px;height:10px;border-radius:3px} .statuskey .li b{font-family:var(--font-mono);color:var(--ink)}
+/* detail */
+#detail{max-width:1000px;margin:0 auto} .back{display:inline-block;margin-bottom:12px;color:var(--brand-2);cursor:pointer;font-size:13px}
+.dhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:3px} .dhead h2{font-size:24px}
+.dsub{color:var(--muted);font-size:13.5px;margin-bottom:14px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px} .actions button{font-size:12.5px;padding:6px 12px;border:1px solid var(--line-2);border-radius:8px;background:var(--surface);color:var(--ink);cursor:pointer}
+.actions button:hover{background:var(--surface-2);border-color:var(--brand)} .actions button.danger:hover{border-color:var(--st-lost);color:var(--st-lost)} .actions button.ok{color:var(--brand);font-weight:600}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px} @media(max-width:760px){.grid{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:15px 17px} .card.wide{grid-column:1/-1}
+.card h3{font-size:12px;font-family:var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+.kv{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:13px;border-bottom:1px solid var(--line)} .kv:last-child{border-bottom:0} .kv .k{color:var(--muted)} .kv .v{font-variant-numeric:tabular-nums}
+.mut{color:var(--muted)} .bul{margin:0;padding-left:18px;font-size:13.5px;line-height:1.6}
+.comp{display:grid;grid-template-columns:46px 1fr auto;gap:8px;font-size:12.5px;padding:5px 0;border-bottom:1px solid var(--line)} .comp .mi{color:var(--muted)}
+.htbl{width:100%;border-collapse:collapse;font-size:12.5px} .htbl td,.htbl th{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap} .htbl th{color:var(--muted);font-weight:500;font-size:11px;position:static;background:none;text-transform:none;letter-spacing:0}
+.cut{color:var(--st-lost);font-weight:600} .rise{color:var(--muted)} .flag-ok{color:var(--st-active)} .flag-no{color:var(--st-lost)}
+.modelbox{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px}
+.modelbox .h{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--brand);margin-bottom:8px}
+.modelgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px} .modelgrid .m .k{color:var(--muted);font-size:11px} .modelgrid .m .v{font-family:var(--font-display);font-size:17px}
+/* login + toast */
+#login{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:color-mix(in srgb,var(--bg) 70%,#000);z-index:40}
+#login form{background:var(--surface);padding:28px;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.3);display:flex;flex-direction:column;gap:11px;width:300px;border:1px solid var(--line)}
+#login h2{font-size:19px} #login .sub{color:var(--muted);font-size:13px;margin-top:-4px}
+#login input{padding:9px;border:1px solid var(--line-2);border-radius:8px;font-size:14px;background:var(--surface);color:var(--ink)}
+#login button{padding:9px;border:0;border-radius:8px;background:var(--brand);color:#fff;font-weight:600;cursor:pointer} #login .err{color:var(--st-lost);font-size:12px;min-height:14px}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:9px 15px;border-radius:9px;font-size:13px;opacity:0;transition:.2s;pointer-events:none;z-index:50}
+[hidden]{display:none!important}
 </style>
 </head>
 <body>
-<header>
-  <h1>RTP Deal Dashboard</h1>
-  <span class="meta" id="meta">loading…</span>
-  <span class="sp"></span>
-  <button onclick="logout()">log out</button>
-</header>
+<header><div class="wrap bar">
+  <div class="brand"><span class="mark"></span>Rising&nbsp;<span class="tide">Tide</span>&nbsp;Partners</div>
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" data-panel="live" aria-selected="true">Live Pipeline</button>
+    <button class="tab" role="tab" data-panel="deals" aria-selected="false">Deals</button>
+    <button class="tab" role="tab" data-panel="map" aria-selected="false">Map</button>
+    <button class="tab" role="tab" data-panel="stats" aria-selected="false">Stats</button>
+  </nav>
+  <button class="iconbtn" id="theme" title="Toggle theme">◐</button>
+  <button class="iconbtn" onclick="logout()">Log out</button>
+</div></header>
 
-<div class="filters">
-  <label>Tier
-    <select id="f-tier"><option value="">any</option><option>Priority</option><option>Watch</option><option>Pass</option></select></label>
-  <label>City <input id="f-city" placeholder="e.g. Manchester"></label>
-  <label>Units ≥ <input id="f-umin" type="number" min="0"></label>
-  <label>Units ≤ <input id="f-umax" type="number" min="0"></label>
-  <label>Score ≥ <input id="f-smin" type="number" min="0" max="100"></label>
-  <label>Status <input id="f-status" placeholder="override (comma list)"></label>
-  <div class="toggles">
-    <label><input type="checkbox" id="t-comps"> comps</label>
-    <label><input type="checkbox" id="t-needs"> needs_review</label>
-    <label><input type="checkbox" id="t-quiet"> incl. quiet</label>
-    <label><input type="checkbox" id="t-closed"> lost/passed</label>
-  </div>
-</div>
+<main class="wrap">
+  <!-- LIVE -->
+  <section class="panel on" id="live">
+    <div class="section-head"><div><div class="eyebrow">Active · Small-balance multifamily · NH + MA SouthCoast</div><h2>Live Pipeline</h2></div><div class="note" id="live-note"></div></div>
+    <div class="snapshot" id="snapshot"></div>
+    <div class="deals" id="live-deals"></div>
+    <div class="callout"><b>Underwriting figures sync nightly from Drive.</b> Cap rate, NOI and basis below are pulled from each deal's latest model every morning. Returns (IRR/multiple) are shown as the model states them; open a deal for full detail.</div>
+  </section>
+  <!-- DEALS -->
+  <section class="panel" id="deals">
+    <div class="section-head"><div><div class="eyebrow">Browse everything · comps · review queue</div><h2>Deals</h2></div><div class="note" id="deals-note"></div></div>
+    <div class="filters">
+      <label>Tier<select id="f-tier"><option value="">any</option><option>Priority</option><option>Watch</option><option>Pass</option></select></label>
+      <label>City<input id="f-city" placeholder="Manchester"></label>
+      <label>Units ≥<input id="f-umin" type="number" min="0"></label>
+      <label>Units ≤<input id="f-umax" type="number" min="0"></label>
+      <div class="toggles">
+        <label><input type="checkbox" id="t-comps"> comps</label>
+        <label><input type="checkbox" id="t-needs"> needs review</label>
+        <label><input type="checkbox" id="t-quiet"> incl. quiet</label>
+        <label><input type="checkbox" id="t-closed"> passed/lost</label>
+      </div>
+    </div>
+    <div class="tablecard"><div class="tscroll"><table><thead><tr id="head"></tr></thead><tbody id="tbody"></tbody></table></div>
+      <div class="empty" id="empty" hidden>No deals match these filters.</div></div>
+  </section>
+  <!-- MAP -->
+  <section class="panel" id="map">
+    <div class="section-head"><div><div class="eyebrow">Every tracked property · geocoded</div><h2>Footprint</h2></div><div class="note" id="map-note"></div></div>
+    <div class="mapcard"><div class="mapwrap" id="mapwrap"><div class="tooltip" id="mtip"></div></div><div class="legend" id="legend"></div></div>
+  </section>
+  <!-- STATS -->
+  <section class="panel" id="stats">
+    <div class="section-head"><div><div class="eyebrow">Portfolio &amp; comp intelligence</div><h2>Stats</h2></div><div class="note" id="stats-note"></div></div>
+    <div class="kpis" id="kpis"></div>
+    <div class="charts">
+      <div class="chartcard"><h3>Deals by market</h3><div class="sub">Where the flow concentrates</div><div class="rows" id="byMarket"></div></div>
+      <div class="chartcard"><h3>Median $/unit by market</h3><div class="sub">Comp basis · markets with 2+ priced deals</div><div class="rows" id="byPPU"></div></div>
+    </div>
+    <div class="chartcard" style="margin-top:18px"><h3>Database by status</h3><div class="sub">Nothing deleted — passed &amp; comps stay as history and reference</div><div class="statusbar" id="statusbar"></div><div class="statuskey" id="statuskey"></div></div>
+  </section>
 
-<table id="tbl">
-  <thead><tr id="head"></tr></thead>
-  <tbody id="body"></tbody>
-</table>
-<div class="empty" id="empty" style="display:none">No deals match these filters.</div>
+  <section class="panel" id="detailpanel"><div id="detail"></div></section>
+</main>
 
-<div id="detail" style="display:none"></div>
-
-<div id="login"><form onsubmit="return doLogin(event)">
-  <h2>RTP Deal Dashboard</h2>
-  <input id="pw" type="password" placeholder="password" autofocus>
-  <button type="submit">Log in</button>
-  <div class="err" id="loginerr"></div>
-</form></div>
+<div id="login"><form onsubmit="return doLogin(event)"><h2>Rising Tide Pipeline</h2><div class="sub">Enter the dashboard password.</div>
+  <input id="pw" type="password" placeholder="password" autofocus><button type="submit">Log in</button><div class="err" id="loginerr"></div></form></div>
 <div id="toast"></div>
 
 <script>
-const COLS = [
-  {k:'name',  t:'Address', addr:true},
-  {k:'market',t:'City'},
-  {k:'effective_units', t:'Units', num:true},
-  {k:'effective_ask',   t:'Ask',   num:true, money:true},
-  {k:'price_per_unit',  t:'$/Unit',num:true, money:true},
-  {k:'tier',  t:'Tier', badge:true},
-  {k:'score', t:'Score', num:true},
-  {k:'score_confidence', t:'Conf'},
-  {k:'status', t:'Status', stat:true},
-  {k:'source_broker', t:'Source / Broker', srcbroker:true},
-  {k:'last_seen_at', t:'Last seen', date:true},
-];
-function sourceBroker(d){
-  const s=d.source, name=d.broker_name, email=d.broker_email;
-  if(s==='mls_export'||s==='mlspin'||s==='primemls') return '<span class="mut">MLS</span>';
-  if(email) return `<a class="addr" href="mailto:${email}" title="${email}" onclick="event.stopPropagation()">${name||email}</a>`;
-  if(name) return name;
-  return s ? `<span class="mut">${s}</span>` : '—';
-}
-let DEALS = [], sortCol = null, sortDir = -1;   // null => server default order
-
-function money(c){ return c==null ? '—' : '$'+Math.round(c/100).toLocaleString(); }
-function dt(s){ return s ? s.slice(0,10) : '—'; }
-function mapsUrl(d){ const q = encodeURIComponent(`${(d.name&&d.name.toLowerCase()!=='unknown')?d.name:''} ${d.market||''} ${d.state||''}`.trim());
-  return `https://www.google.com/maps/search/?api=1&query=${q}`; }
-
-function qs(){
-  const p = new URLSearchParams();
-  const tier=val('f-tier'), city=val('f-city'), umin=val('f-umin'), umax=val('f-umax'),
-        smin=val('f-smin'), status=val('f-status');
-  if(tier) p.set('tier',tier); if(city) p.set('city',city);
-  if(umin) p.set('units_min',umin); if(umax) p.set('units_max',umax);
-  if(smin) p.set('score_min',smin); if(status) p.set('status',status);
-  if(chk('t-comps')) p.set('comps','true');
-  if(chk('t-needs')) p.set('needs_review','true');
-  if(chk('t-quiet')) p.set('quiet','true');
-  if(chk('t-closed')) p.set('closed','true');
-  return p.toString();
-}
-const val=id=>document.getElementById(id).value.trim();
-const chk=id=>document.getElementById(id).checked;
-
-async function load(){
-  const r = await fetch('/api/deals?'+qs());
-  if(r.status===401){ showLogin(); return; }
-  hideLogin();
-  const d = await r.json();
-  DEALS = d.deals;
-  document.getElementById('meta').textContent =
-    `${d.count} deal${d.count!==1?'s':''} · ${d.filters.statuses.join(', ')}`;
-  render();
-}
-
-function render(){
-  let rows = DEALS.slice();
-  if(sortCol){
-    rows.sort((a,b)=>{ let x=a[sortCol], y=b[sortCol];
-      if(x==null) return 1; if(y==null) return -1;
-      if(typeof x==='string'){ x=x.toLowerCase(); y=(y||'').toLowerCase(); }
-      return (x<y?-1:x>y?1:0)*sortDir; });
-  }
-  const body=document.getElementById('body'); body.innerHTML='';
-  document.getElementById('empty').style.display = rows.length? 'none':'block';
-  for(const d of rows){
-    const tr=document.createElement('tr');
-    tr.onclick=()=>showDetail(d.deal_kind,d.deal_id);
-    tr.innerHTML = COLS.map(c=>{
-      let v=d[c.k];
-      if(c.addr) return `<td><a class="addr" href="${mapsUrl(d)}" target="_blank" onclick="event.stopPropagation()">${v||'—'}</a></td>`;
-      if(c.money) return `<td class="num">${money(v)}</td>`;
-      if(c.date) return `<td>${dt(v)}</td>`;
-      if(c.badge) return `<td>${v?`<span class="badge ${v}">${v}</span>`:'—'}</td>`;
-      if(c.stat) return `<td><span class="stat ${v}">${v}</span></td>`;
-      if(c.srcbroker) return `<td>${sourceBroker(d)}</td>`;
-      if(c.num) return `<td class="num">${v==null?'—':v}</td>`;
-      return `<td>${v==null?'—':v}</td>`;
-    }).join('');
-    body.appendChild(tr);
-  }
-}
-
-function buildHead(){
-  const h=document.getElementById('head'); h.innerHTML='';
-  COLS.forEach(c=>{
-    const th=document.createElement('th'); th.textContent=c.t; if(c.num) th.className='num';
-    th.onclick=()=>{ if(sortCol===c.k) sortDir*=-1; else {sortCol=c.k; sortDir=1;}
-      [...h.children].forEach(x=>x.classList.remove('sorted','asc'));
-      th.classList.add('sorted'); if(sortDir>0) th.classList.add('asc'); render(); };
-    h.appendChild(th);
-  });
-}
-
-const STATUS_LABEL={underwriting:'Underwriting',loi_sent:'LOI sent',under_contract:'Under contract',lost:'Lost',passed:'Passed',lead:'Lead'};
-async function setStatus(kind,id,status){
-  if((status==='lost'||status==='passed') &&
-     !confirm(`Mark this deal "${STATUS_LABEL[status]}"? This removes it from the active pipeline.`)) return;
-  const r=await fetch(`/api/deals/${kind}/${id}/status`,{method:'POST',
-    headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
-  if(r.status===401){ showLogin(); return; }
-  if(r.ok){ const res=await r.json(); toast(`${res.old} → ${res.new}`);
-    await load(); showDetail(kind,id); }
-  else toast('failed ('+r.status+')'); }
-
-const LAB={cap_stabilized:'Stabilized cap',cap_current:'Current cap',ppu:'$/unit vs market',
-  dscr:'DSCR',rent_upside:'Rent upside',units:'Unit sweet-spot',dom:'Days on market'};
+const STATUS={underwriting:{c:'var(--st-active)',bg:'var(--st-active-bg)',label:'Underwriting'},lead:{c:'var(--st-active)',bg:'var(--st-active-bg)',label:'Lead'},
+  loi_sent:{c:'var(--st-active)',bg:'var(--st-active-bg)',label:'LOI sent'},under_contract:{c:'var(--st-active)',bg:'var(--st-active-bg)',label:'Under contract'},
+  comp_only:{c:'var(--st-comp)',bg:'var(--st-comp-bg)',label:'Comp'},passed:{c:'var(--st-passed)',bg:'var(--st-passed-bg)',label:'Passed'},
+  needs_review:{c:'var(--st-review)',bg:'var(--st-review-bg)',label:'Needs review'},lost:{c:'var(--st-lost)',bg:'var(--st-lost-bg)',label:'Lost'}};
+const money=c=>c==null?'—':'$'+Math.round(c/100).toLocaleString();          // cents -> $
+const fmtD=v=>{if(v==null)return null;const d=Math.abs(v);return v<0?'-'+fmtD(-v):d>=1e6?'$'+(d/1e6).toFixed(d>=1e7?1:2)+'M':d>=1e3?'$'+Math.round(d/1e3)+'K':'$'+Math.round(d);}; // dollars
 const pct=r=>r==null?'—':(r*100).toFixed(1)+'%';
-const rentMo=d=>d==null?'<span class="mut">not provided</span>':'$'+Number(d).toLocaleString()+'/mo';
 const num2=x=>x==null?'—':Number(x).toFixed(2);
-function flag(f){ return f? '<span class="flag-ok">✓</span>':'<span class="flag-no">✗</span>'; }
+const dt=s=>s?s.slice(0,10):'—';
+const mapsUrl=d=>{const q=encodeURIComponent(`${(d.name&&d.name.toLowerCase()!=='unknown')?d.name:(d.address||'')} ${d.market||d.city||''} ${d.state||''}`.trim());return `https://www.google.com/maps/search/?api=1&query=${q}`;};
+let CACHE={};
 
-function setView(showDetailView){
-  document.querySelector('.filters').style.display=showDetailView?'none':'';
-  document.getElementById('tbl').style.display=showDetailView?'none':'';
-  document.getElementById('detail').style.display=showDetailView?'block':'none';
-  if(!showDetailView) document.getElementById('empty').style.display='none';
+/* tabs */
+const panels=[...document.querySelectorAll('.panel')],tabs=[...document.querySelectorAll('.tab')];
+function show(id,fromTab){
+  panels.forEach(p=>p.classList.toggle('on',p.id===id));
+  if(fromTab!==false) tabs.forEach(t=>t.setAttribute('aria-selected',t.dataset.panel===id));
+  try{if(id!=='detailpanel')localStorage.setItem('rtp_tab',id)}catch(e){}
+  if(id==='live')loadLive(); if(id==='deals')loadDeals(); if(id==='map')loadMap(); if(id==='stats')loadStats();
 }
-function back(){ setView(false); }
+tabs.forEach(t=>t.onclick=()=>show(t.dataset.panel));
 
-async function showDetail(kind,id){
-  const r=await fetch(`/api/deals/${kind}/${id}`);
-  if(r.status===401){ showLogin(); return; }
-  const d=await r.json();
-  const c=await (await fetch(`/api/deals/${kind}/${id}/comps?radius_miles=10&limit=15`)).json();
-  renderDetail(d,c); setView(true); window.scrollTo(0,0);
+/* theme */
+const tb=document.getElementById('theme');
+try{const s=localStorage.getItem('rtp_theme');if(s)document.documentElement.setAttribute('data-theme',s);}catch(e){}
+tb.onclick=()=>{const cur=document.documentElement.getAttribute('data-theme');const dark=cur?cur==='dark':matchMedia('(prefers-color-scheme:dark)').matches;
+  const nx=dark?'light':'dark';document.documentElement.setAttribute('data-theme',nx);try{localStorage.setItem('rtp_theme',nx)}catch(e){}
+  if(document.getElementById('map').classList.contains('on'))drawMap(CACHE.map);};
+
+/* auth */
+async function api(path,opts){const r=await fetch(path,opts);if(r.status===401){showLogin();throw new Error('401');}return r;}
+function showLogin(){document.getElementById('login').style.display='flex';document.getElementById('pw').focus();}
+function hideLogin(){document.getElementById('login').style.display='none';}
+async function doLogin(e){e.preventDefault();
+  const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:document.getElementById('pw').value})});
+  if(r.ok){document.getElementById('loginerr').textContent='';hideLogin();boot();}else document.getElementById('loginerr').textContent='Wrong password';return false;}
+async function logout(){await fetch('/api/logout',{method:'POST'});showLogin();}
+
+/* ---- LIVE ---- */
+const UW_ROWS=[['purchase_price','Basis','d'],['price_per_unit','$/unit','d'],['in_place_cap','In-place cap','p'],
+  ['stabilized_cap','Stab. cap','p'],['noi','NOI','d'],['exit_cap','Exit cap','p'],['irr','IRR','p'],['equity_multiple','Equity mult.','x'],['dscr','DSCR','x']];
+const fmtUW=(k,v,t)=>t==='p'?(v*100).toFixed(1)+'%':t==='x'?Number(v).toFixed(2)+'×':fmtD(v);
+async function loadLive(){
+  if(CACHE.pipeline){return renderLive(CACHE.pipeline);}
+  try{const d=await(await api('/api/pipeline')).json();CACHE.pipeline=d;renderLive(d);}catch(e){}
+}
+function renderLive(d){
+  const P=d.deals;
+  const basis=x=>{const s=x.model_stats&&x.model_stats.canonical;return s&&s.purchase_price!=null?s.purchase_price*100:x.asking_price;};
+  const val=P.reduce((a,x)=>a+(basis(x)||0),0), units=P.reduce((a,x)=>a+(x.units||0),0), modeled=P.filter(x=>x.model_file).length;
+  document.getElementById('snapshot').innerHTML=[['Active deals',P.length],['Combined basis',fmtD(val/100)||'—'],['Total units',units],['Underwritten',modeled+' of '+P.length]]
+    .map(([k,v])=>`<div class="snap"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+  document.getElementById('live-deals').innerHTML=P.map(x=>{
+    const st=STATUS[x.status]||STATUS.comp_only, canon=(x.model_stats&&x.model_stats.canonical)||null;
+    let metrics,foot,tagline='';
+    if(canon){
+      const cells=UW_ROWS.filter(([k])=>canon[k]!=null).slice(0,6).map(([k,lab,t])=>`<div class="metric"><div class="k">${lab}</div><div class="val">${fmtUW(k,canon[k],t)}</div></div>`).join('');
+      metrics=cells;
+      foot=`<span class="tag src">per ${x.model_file? x.model_file.replace(/^.*?([A-Za-z].*)\.xlsx$/,'$1').slice(-24):'model'} · ${x.model_synced_at?('synced '+x.model_synced_at.slice(0,10)):''}</span>`;
+    }else{
+      metrics=[['Units',x.units??'—'],['Ask',money(x.asking_price)],['$/unit',money(x.price_per_unit)]].map(([k,v])=>`<div class="metric"><div class="k">${k}</div><div class="val">${v}</div></div>`).join('')
+        +`<div class="metric"><div class="k">Model</div><div class="val pend">not started</div></div>`;
+      foot=`<span class="tag">UW model not started</span>`;
+    }
+    const um=''; // unit mix comes from detail
+    const contact=x.broker_name?`<span class="lbl">Broker </span>${x.broker_email?`<a href="mailto:${x.broker_email}" onclick="event.stopPropagation()">${x.broker_name}</a>`:x.broker_name}`:`<span class="lbl">Source </span>${x.source==='mls_export'?'MLS':'Broker email'}`;
+    return `<article class="deal" onclick="openDeal('listing',${x.id})"><div class="stripe"></div><div class="body">
+      <div class="deal-top"><div><div class="name">${x.address}</div>
+        <div class="loc"><b>${x.city}, ${x.state}</b> · #${x.id} · via ${x.account==='rtp'?'RTP inbox':x.account==='personal'?'personal inbox':'MLS'}${tagline}</div></div>
+        <span class="pill ${x.status}">${st.label}</span></div>
+      <div class="metrics">${metrics}</div>
+      <div class="deal-foot"><div class="contact">${contact}</div>${foot}</div></div></article>`;
+  }).join('');
+  document.getElementById('live-note').textContent=P.length+' active';
 }
 
+/* ---- DEALS TABLE ---- */
+const COLS=[{k:'name',t:'Address'},{k:'market',t:'City'},{k:'effective_units',t:'Units',n:true},
+  {k:'effective_ask',t:'Ask',n:true,money:true},{k:'price_per_unit',t:'$/Unit',n:true,money:true},
+  {k:'tier',t:'Tier',badge:true},{k:'score',t:'Score',n:true},{k:'status',t:'Status',stat:true},
+  {k:'source',t:'Source',src:true},{k:'last_seen_at',t:'Last seen',date:true}];
+let DEALS=[],sortCol=null,sortDir=-1;
+const val=id=>document.getElementById(id).value.trim(),chk=id=>document.getElementById(id).checked;
+function qs(){const p=new URLSearchParams();const m={'f-tier':'tier','f-city':'city','f-umin':'units_min','f-umax':'units_max'};
+  for(const[id,key]of Object.entries(m)){const v=val(id);if(v)p.set(key,v);}
+  if(chk('t-comps'))p.set('comps','true');if(chk('t-needs'))p.set('needs_review','true');if(chk('t-quiet'))p.set('quiet','true');if(chk('t-closed'))p.set('closed','true');
+  return p.toString();}
+async function loadDeals(){
+  try{const d=await(await api('/api/deals?'+qs())).json();DEALS=d.deals;
+    document.getElementById('deals-note').textContent=`${d.count} deal${d.count!==1?'s':''}`;renderTable();}catch(e){}
+}
+function srcCell(d){if(['mls_export','mlspin','primemls'].includes(d.source))return '<span class="mut">MLS</span>';
+  if(d.broker_email)return `<a href="mailto:${d.broker_email}" onclick="event.stopPropagation()">${d.broker_name||d.broker_email}</a>`;return d.broker_name||(d.source?`<span class="mut">${d.source}</span>`:'—');}
+function renderTable(){
+  let rows=DEALS.slice();
+  if(sortCol)rows.sort((a,b)=>{let x=a[sortCol],y=b[sortCol];if(x==null)return 1;if(y==null)return -1;if(typeof x==='string'){x=x.toLowerCase();y=(y||'').toLowerCase();}return(x<y?-1:x>y?1:0)*sortDir;});
+  const h=document.getElementById('head');if(!h.children.length){COLS.forEach(c=>{const th=document.createElement('th');th.textContent=c.t;if(c.n)th.className='n';
+    th.onclick=()=>{if(sortCol===c.k)sortDir*=-1;else{sortCol=c.k;sortDir=1;}[...h.children].forEach(x=>x.classList.remove('sorted','asc'));th.classList.add('sorted');if(sortDir>0)th.classList.add('asc');renderTable();};h.appendChild(th);});}
+  const b=document.getElementById('tbody');b.innerHTML='';document.getElementById('empty').hidden=rows.length>0;
+  for(const d of rows){const tr=document.createElement('tr');tr.onclick=()=>openDeal(d.deal_kind,d.deal_id);
+    tr.innerHTML=COLS.map(c=>{let v=d[c.k];
+      if(c.money)return `<td class="n">${money(v)}</td>`;if(c.date)return `<td>${dt(v)}</td>`;
+      if(c.badge)return `<td>${v?`<span class="badge ${v}">${v}</span>`:'—'}</td>`;
+      if(c.stat)return `<td><span class="stat ${v}">${(STATUS[v]||{}).label||v}</span></td>`;
+      if(c.src)return `<td>${srcCell(d)}</td>`;if(c.n)return `<td class="n">${v==null?'—':v}</td>`;
+      return `<td>${v==null?'—':v}</td>`;}).join('');b.appendChild(tr);}
+}
+let deb;document.querySelectorAll('#deals .filters input,#deals .filters select').forEach(el=>el.addEventListener('input',()=>{clearTimeout(deb);deb=setTimeout(loadDeals,250);}));
+
+/* ---- MAP ---- */
+async function loadMap(){if(CACHE.map){drawMap(CACHE.map);return;}try{const d=await(await api('/api/map')).json();CACHE.map=d.listings;drawMap(d.listings);}catch(e){}}
+function drawMap(listings){
+  const pts=listings.filter(r=>r.latitude&&r.longitude).map(r=>({...r,lat:+r.latitude,lng:+r.longitude}));
+  if(!pts.length)return;
+  const W=880,H=560,pad=52;const lats=pts.map(p=>p.lat),lngs=pts.map(p=>p.lng);
+  const mLa=Math.min(...lats),xLa=Math.max(...lats),mLo=Math.min(...lngs),xLo=Math.max(...lngs);
+  const sx=lo=>pad+(lo-mLo)/((xLo-mLo)||1)*(W-2*pad),sy=la=>pad+(xLa-la)/((xLa-mLa)||1)*(H-2*pad);
+  const seen={};pts.forEach(p=>{const k=p.lat.toFixed(3)+','+p.lng.toFixed(3);const n=seen[k]=(seen[k]||0)+1;const a=n*1.9;p.jx=n>1?Math.cos(a)*(3+n):0;p.jy=n>1?Math.sin(a)*(3+n):0;});
+  const order=['comp_only','passed','needs_review','lost','lead','underwriting'];pts.sort((a,b)=>order.indexOf(a.status)-order.indexOf(b.status));
+  const cities=[['Manchester',42.99,-71.46],['Rochester',43.30,-70.98],['Nashua',42.76,-71.46],['Dover',43.19,-70.88],['Laconia',43.53,-71.46],['Fall River',41.69,-71.15],['New Bedford',41.63,-70.93],['Boston',42.34,-71.06],['Worcester',42.27,-71.81]];
+  let s=`<svg class="map" viewBox="0 0 ${W} ${H}" role="img" aria-label="Map of tracked properties"><rect x="1" y="1" width="${W-2}" height="${H-2}" rx="12" fill="none" stroke="var(--line)"/>`;
+  cities.forEach(([nm,la,lo])=>{if(la<mLa-.2||la>xLa+.2||lo<mLo-.2||lo>xLo+.2)return;s+=`<text x="${sx(lo)+7}" y="${sy(la)-6}" font-family="var(--font-mono)" font-size="11" fill="var(--muted)" opacity=".8">${nm}</text>`;});
+  const active=st=>['underwriting','lead','loi_sent','under_contract'].includes(st);
+  pts.forEach(p=>{const st=STATUS[p.status]||STATUS.comp_only,ac=active(p.status);const x=(sx(p.lng)+p.jx).toFixed(1),y=(sy(p.lat)+p.jy).toFixed(1);const r=ac?7.5:4.2;
+    s+=`<circle class="mdot" cx="${x}" cy="${y}" r="${r}" fill="${st.c}" fill-opacity="${ac?1:.7}" stroke="${ac?'var(--accent)':'var(--surface)'}" stroke-width="${ac?2.2:1}" data-t="${(p.address||'—').replace(/"/g,'')}|${p.city} ${p.state}|${p.units?p.units+'u':'—'} ${st.label}"></circle>`;
+    if(p.status==='underwriting')s+=`<text x="${x}" y="${(+y-12)}" text-anchor="middle" font-family="var(--font-display)" font-weight="600" font-size="12" fill="var(--ink)">${p.units||''}u</text>`;});
+  s+=`</svg>`;const wrap=document.getElementById('mapwrap');wrap.querySelectorAll('svg').forEach(e=>e.remove());wrap.insertAdjacentHTML('afterbegin',s);
+  const tip=document.getElementById('mtip');
+  wrap.querySelectorAll('.mdot').forEach(c=>{c.addEventListener('mousemove',e=>{const[a,b,d]=c.dataset.t.split('|');const rc=wrap.getBoundingClientRect();tip.style.left=(e.clientX-rc.left)+'px';tip.style.top=(e.clientY-rc.top)+'px';tip.innerHTML=`<b>${a}</b><br><span class="mono" style="opacity:.85">${b} · ${d}</span>`;tip.style.opacity=1;});c.addEventListener('mouseleave',()=>tip.style.opacity=0);});
+  document.getElementById('legend').innerHTML=Object.entries(STATUS).filter(([k])=>k!=='lead'&&k!=='loi_sent'&&k!=='under_contract').map(([k,st])=>{const n=pts.filter(p=>p.status===k).length;return `<span class="li"><span class="sw" style="background:${st.c}"></span>${st.label} <b class="mono" style="color:var(--muted)">${n}</b></span>`;}).join('');
+  document.getElementById('map-note').textContent=pts.length+' of '+listings.length+' geocoded';
+}
+
+/* ---- STATS ---- */
+async function loadStats(){if(!CACHE.map){try{const d=await(await api('/api/map')).json();CACHE.map=d.listings;}catch(e){return;}}
+  if(!CACHE.pipeline){try{CACHE.pipeline=await(await api('/api/pipeline')).json();}catch(e){}}renderStats();}
+function renderStats(){
+  const L=CACHE.map,P=(CACHE.pipeline&&CACHE.pipeline.deals)||[];
+  const priced=L.filter(r=>r.price_per_unit);const med=a=>{const s=[...a].sort((x,y)=>x-y),m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2;};
+  const basis=x=>{const s=x.model_stats&&x.model_stats.canonical;return s&&s.purchase_price!=null?s.purchase_price*100:x.asking_price;};
+  const active=P.reduce((a,x)=>a+(basis(x)||0),0);
+  const kpis=[['Active pipeline',fmtD(active/100)||'—',P.length+' deals'],['Pipeline units',P.reduce((a,x)=>a+(x.units||0),0),new Set(P.map(x=>x.city)).size+' markets'],
+    ['Comps tracked',L.filter(r=>r.status==='comp_only').length,'sale-comp DB'],['Median $/unit',priced.length?money(med(priced.map(r=>r.price_per_unit))):'—',priced.length+' priced'],['Total tracked',L.length,'nothing deleted']];
+  document.getElementById('kpis').innerHTML=kpis.map(([k,v,s])=>`<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div><div class="sub">${s}</div></div>`).join('');
+  const mc={};L.forEach(r=>{if(r.city&&r.city!=='Unknown')mc[r.city]=(mc[r.city]||0)+1;});
+  const top=Object.entries(mc).sort((a,b)=>b[1]-a[1]).slice(0,8),mx=Math.max(...top.map(t=>t[1]),1);
+  document.getElementById('byMarket').innerHTML=top.map(([c,n])=>`<div class="row"><div class="rl">${c}</div><div class="track"><div class="fill" style="width:${n/mx*100}%"></div></div><div class="rv">${n}</div></div>`).join('');
+  const mp={};priced.forEach(r=>{(mp[r.city]=mp[r.city]||[]).push(r.price_per_unit);});
+  const pp=Object.entries(mp).filter(([,a])=>a.length>=2).map(([c,a])=>[c,med(a)]).sort((a,b)=>b[1]-a[1]).slice(0,8),pmx=Math.max(...pp.map(t=>t[1]),1);
+  document.getElementById('byPPU').innerHTML=pp.map(([c,v])=>`<div class="row"><div class="rl">${c}</div><div class="track"><div class="fill" style="width:${v/pmx*100}%"></div></div><div class="rv">${money(v)}</div></div>`).join('');
+  const sc={};L.forEach(r=>{sc[r.status]=(sc[r.status]||0)+1;});const so=['underwriting','lead','comp_only','needs_review','passed','lost'].filter(s=>sc[s]);
+  document.getElementById('statusbar').innerHTML=so.map(s=>`<div class="seg" style="width:${sc[s]/L.length*100}%;background:${STATUS[s].c}" title="${STATUS[s].label}: ${sc[s]}"></div>`).join('');
+  document.getElementById('statuskey').innerHTML=so.map(s=>`<span class="li"><span class="sw" style="background:${STATUS[s].c}"></span>${STATUS[s].label} <b>${sc[s]}</b></span>`).join('');
+  document.getElementById('stats-note').textContent=L.length+' properties';
+}
+
+/* ---- DETAIL ---- */
+const LAB={cap_stabilized:'Stabilized cap',cap_current:'Current cap',ppu:'$/unit vs market',dscr:'DSCR',rent_upside:'Rent upside',units:'Unit sweet-spot',dom:'Days on market'};
+const rentMo=d=>d==null?'<span class="mut">—</span>':'$'+Number(d).toLocaleString()+'/mo';
+const flag=f=>f?'<span class="flag-ok">✓</span>':'<span class="flag-no">✗</span>';
+async function openDeal(kind,id){
+  try{const d=await(await api(`/api/deals/${kind}/${id}`)).json();
+    const c=await(await api(`/api/deals/${kind}/${id}/comps?radius_miles=10&limit=15`)).json();
+    renderDetail(d,c);show('detailpanel',false);tabs.forEach(t=>t.setAttribute('aria-selected','false'));window.scrollTo(0,0);}catch(e){}
+}
+function backTo(){show(localStorage.getItem('rtp_tab')||'live');}
+async function setStatus(kind,id,status){
+  if((status==='lost'||status==='passed')&&!confirm(`Mark "${(STATUS[status]||{}).label||status}"? Removes it from the active pipeline (data is kept).`))return;
+  try{const r=await api(`/api/deals/${kind}/${id}/status`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
+    if(r.ok){const res=await r.json();toast(`${res.old} → ${res.new}`);CACHE.pipeline=null;CACHE.map=null;openDeal(kind,id);}else toast('failed');}catch(e){}
+}
 function renderDetail(d,c){
-  const dl=d.deal, u=d.underwriting||{}, bf=(u.buy_box_flags)||{};
-  const bd=bf._score_breakdown||{}, na=bf._not_assessed||[];
-  const ppu=dl.price_per_unit, ask=dl.effective_ask;
-
-  // score breakdown bars
-  const bars=Object.keys(bd).map(k=>{ const b=bd[k]; const w=Math.min(100,(b.contribution||0)/25*100);
-    return `<div class="bar"><span class="lab">${LAB[k]||k}</span>
-      <span class="track"><span class="fill" style="width:${w}%"></span></span>
-      <span class="pts">+${(b.contribution??0).toFixed(1)}</span>
-      <span class="det">${b.detail||''}</span></div>`; }).join('');
-  const naHtml=na.length?`<div class="mut" style="font-size:12px;margin-top:8px">Not assessed: ${na.join('; ')}</div>`:'';
-
-  // buy-box criteria
-  const crit=['geography','units','price','year_built','property_class'].filter(k=>bf[k])
-    .map(k=>`<span style="margin-right:12px">${flag(bf[k].pass)} ${k.replace('_',' ')}</span>`).join('');
-
-  // metrics
-  const metrics=[
-    ['Current cap',pct(u.implied_cap_current)],['Stabilized cap',pct(u.implied_cap_stabilized)],
-    ['Rent upside',pct(u.rent_upside_pct)],['DSCR',num2(u.estimated_dscr)],
-    ['Est. 5-yr IRR',pct(u.estimated_irr_5yr)],['$/unit vs mkt',pct(u.price_per_unit_vs_market)],
-  ].map(([k,v])=>`<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
-
-  // summary bullets
+  const dl=d.deal,u=d.underwriting||{},bf=u.buy_box_flags||{},canon=(u.model_stats&&u.model_stats.canonical)||null;
+  const modelHtml=canon?`<div class="modelbox"><div class="h">Latest UW model · ${u.model_file||''} · synced ${u.model_synced_at?u.model_synced_at.slice(0,10):'—'}</div>
+    <div class="modelgrid">${UW_ROWS.filter(([k])=>canon[k]!=null).map(([k,lab,t])=>`<div class="m"><div class="k">${lab}</div><div class="v">${fmtUW(k,canon[k],t)}</div></div>`).join('')}</div></div>`:'';
+  const metrics=[['Current cap',pct(u.implied_cap_current)],['Stabilized cap',pct(u.implied_cap_stabilized)],['Rent upside',pct(u.rent_upside_pct)],['DSCR',num2(u.estimated_dscr)],['Est. 5-yr IRR',pct(u.estimated_irr_5yr)]]
+    .map(([k,v])=>`<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
   const bullets=(u.summary||'').split('\n').filter(x=>x.trim());
-  const sumHtml=bullets.length?`<ul class="bul">${bullets.map(b=>`<li>${b}</li>`).join('')}</ul>`
-    :'<div class="mut">No notable signals flagged.</div>';
-
-  // financials
+  const sumHtml=bullets.length?`<ul class="bul">${bullets.map(b=>`<li>${b}</li>`).join('')}</ul>`:'<div class="mut">No summary yet.</div>';
   const f=d.financials;
-  const finRows=f?[['Gross scheduled rent',money(f.gross_revenue)],['NOI',money(f.noi)],
-    ['Total expenses',money(f.total_expenses)],['Taxes',money(f.taxes)],['Insurance',money(f.insurance)],
-    ['Cap rate (stated)',pct(f.cap_rate)],['Vacancy',pct(f.vacancy_rate)],
-    ['Source / confidence',`${f.data_source||'—'} / ${f.confidence||'—'}`]]
-    .filter(([k,v])=>v&&v!=='—'&&v!=='$NaN').map(([k,v])=>`<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('')
-    :'';
-  const finHtml=finRows||'<div class="mut">Not provided — no structured financials for this deal yet.</div>';
-
-  // unit mix
-  const um=d.unit_mix||[];
-  const umHtml=um.length?`<table class="htbl"><tr><th>Type</th><th>#</th><th>In-place</th><th>Market</th><th>Δ</th></tr>
-    ${um.map(m=>`<tr><td>${m.unit_type||'—'}</td><td>${m.count??'—'}</td>
-      <td>${rentMo(m.avg_rent)}</td><td>${rentMo(m.market_rent)}</td><td>${pct(m.rent_delta_pct)}</td></tr>`).join('')}</table>`
-    :'<div class="mut">Not provided.</div>';
-
-  // comps
-  const comps=(c.comps||[]);
-  const compHtml=comps.length?comps.map(x=>`<div class="comp">
-      <span class="mi">${x.miles!=null?x.miles+' mi':''}</span>
-      <span>${x.address||'—'}, ${x.city} ${x.state} · ${x.units||'?'}u · <span class="stat ${x.status}">${x.status}</span></span>
-      <span>${money(x.asking_price)} · ${money(x.price_per_unit)}/u</span></div>`).join('')
-    :'<div class="mut">No comps found.</div>';
-
-  // history — the price/status trail (motivated-seller signal); enrichment noise collapsed
-  const allH=d.history||[];
-  const h=allH.filter(x=>x.field==='asking_price'||x.field==='status');
-  const otherN=allH.length-h.length;
-  const histHtml=(h.length?`<table class="htbl"><tr><th>Date</th><th>Field</th><th>Change</th></tr>
-    ${h.map(x=>{ let chg;
-      if(x.field==='asking_price'){ const o=+x.old_value,n=+x.new_value; const cut=n<o;
-        chg=`<span class="${cut?'cut':'rise'}">${cut?'▼':'▲'} ${money(o)} → ${money(n)}</span>`; }
-      else chg=`${x.old_value??'—'} → <b>${x.new_value??'—'}</b>`;
-      return `<tr><td>${(x.changed_at||'').slice(0,10)}</td><td>${x.field.replace('_',' ')}</td><td>${chg}</td></tr>`;}).join('')}</table>`
-    :'<div class="mut">No price or status changes recorded.</div>')
-    + (otherN?`<div class="mut" style="font-size:12px;margin-top:6px">+ ${otherN} field enrichment(s)</div>`:'');
-
-  // links
-  const L=d.links||{};
-  const link=(href,txt)=>href?`<a href="${href}" target="_blank">${txt}</a>`:`<span class="mut">${txt}: —</span>`;
-  const linksHtml=[link(L.gmail_thread,'Gmail thread'),
-    L.drive_folder_id?link('https://drive.google.com/drive/folders/'+L.drive_folder_id,'Drive folder'):link(null,'Drive'),
-    link(L.om_url,'OM'),link(L.boe_url,'BOE')].join(' &nbsp;·&nbsp; ');
-
+  const finHtml=f?[['Gross rent',money(f.gross_revenue)],['NOI',money(f.noi)],['Total expenses',money(f.total_expenses)],['Cap rate',pct(f.cap_rate)],['Vacancy',pct(f.vacancy_rate)],['Source',`${f.data_source||'—'}/${f.confidence||'—'}`]]
+    .filter(([k,v])=>v&&v!=='—'&&v!=='$NaN').map(([k,v])=>`<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('')||'<div class="mut">Not provided.</div>':'<div class="mut">Not provided.</div>';
+  const um=d.unit_mix||[];const umHtml=um.length?`<table class="htbl"><tr><th>Type</th><th>#</th><th>In-place</th><th>Market</th></tr>${um.map(m=>`<tr><td>${m.unit_type||'—'}</td><td>${m.count??'—'}</td><td>${rentMo(m.avg_rent)}</td><td>${rentMo(m.market_rent)}</td></tr>`).join('')}</table>`:'<div class="mut">Not provided.</div>';
+  const comps=(c.comps||[]);const compHtml=comps.length?comps.map(x=>`<div class="comp"><span class="mi">${x.miles!=null?x.miles+' mi':''}</span><span>${x.address||'—'}, ${x.city} ${x.state} · ${x.units||'?'}u · <span class="stat ${x.status}">${(STATUS[x.status]||{}).label||x.status}</span></span><span>${money(x.asking_price)}</span></div>`).join(''):'<div class="mut">No comps found.</div>';
+  const allH=d.history||[];const h=allH.filter(x=>x.field==='asking_price'||x.field==='status'||(x.field||'').startsWith('uw.'));
+  const histHtml=h.length?`<table class="htbl"><tr><th>Date</th><th>Field</th><th>Change</th></tr>${h.slice(0,20).map(x=>{let chg;if(x.field==='asking_price'){const o=+x.old_value,n=+x.new_value,cut=n<o;chg=`<span class="${cut?'cut':'rise'}">${cut?'▼':'▲'} ${money(o)} → ${money(n)}</span>`;}else chg=`${x.old_value??'—'} → <b>${x.new_value??'—'}</b>`;return `<tr><td>${(x.changed_at||'').slice(0,10)}</td><td>${(x.field||'').replace('_',' ')}</td><td>${chg}</td></tr>`;}).join('')}</table>`:'<div class="mut">No changes recorded.</div>';
+  const L=d.links||{};const link=(href,txt)=>href?`<a href="${href}" target="_blank">${txt}</a>`:`<span class="mut">${txt}: —</span>`;
+  const linksHtml=[link(L.gmail_thread,'Gmail thread'),L.drive_folder_id?link('https://drive.google.com/drive/folders/'+L.drive_folder_id,'Drive folder'):link(null,'Drive'),link(L.om_url,'OM'),link(L.boe_url,'BOE')].join(' &nbsp;·&nbsp; ');
   document.getElementById('detail').innerHTML=`
-    <a class="back" onclick="back()">← back to deals</a>
-    <div class="dhead"><h2><a class="addr" href="${mapsUrl(dl)}" target="_blank">${dl.name||'—'}</a></h2>
-      ${dl.tier?`<span class="badge ${dl.tier}">${dl.tier}</span>`:''}
-      <span class="mut">score ${dl.score??'—'} · ${dl.score_confidence||'—'} conf</span>
-      <span class="stat ${dl.status}">${dl.status}</span></div>
-    <div class="dsub">${dl.market} ${dl.state} · ${dl.effective_units||'?'} units · ${money(ask)} · ${money(ppu)}/unit · last seen ${(dl.last_seen_at||'').slice(0,10)}</div>
-    <div class="contact">${
-      dl.broker_email
-        ? `<b>Contact:</b> ${dl.broker_name||'broker'} · <a href="mailto:${dl.broker_email}">${dl.broker_email}</a>`
-        : (dl.source==='mls_export'
-            ? `<span class="mut">Source: MLS listing</span>`
-            : (dl.broker_name ? `<b>Contact:</b> ${dl.broker_name}` : `<span class="mut">No broker contact on file</span>`))
-    }</div>
+    <div class="back" onclick="backTo()">← back</div>
+    <div class="dhead"><h2><a href="${mapsUrl(dl)}" target="_blank">${dl.name||'—'}</a></h2>
+      ${dl.tier?`<span class="badge ${dl.tier}">${dl.tier}</span>`:''}<span class="stat ${dl.status}">${(STATUS[dl.status]||{}).label||dl.status}</span></div>
+    <div class="dsub">${dl.market} ${dl.state} · ${dl.effective_units||'?'} units · ${money(dl.effective_ask)} · ${money(dl.price_per_unit)}/unit · last seen ${(dl.last_seen_at||'').slice(0,10)}</div>
     <div class="actions">
       <button onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'underwriting')">→ Underwriting</button>
       <button onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'loi_sent')">→ LOI sent</button>
       <button onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'under_contract')">→ Under contract</button>
-      <button class="danger" onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'lost')">→ Lost</button>
       <button class="danger" onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'passed')">→ Passed</button>
-      <button class="ok" onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'lead')">Reactivate</button>
-    </div>
+      <button class="danger" onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'lost')">→ Lost</button>
+      <button class="ok" onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'lead')">Reactivate</button></div>
+    ${modelHtml}
     <div class="grid">
-      <div class="card wide"><h3>Score breakdown</h3>${bars||'<span class="mut">no components scored</span>'}${naHtml}
-        <div style="margin-top:10px;font-size:12px">Buy-box: ${crit} ${flag(dl.meets_buy_box)} meets buy box</div></div>
-      <div class="card"><h3>Quick metrics</h3>${metrics}</div>
-      <div class="card"><h3>AI summary</h3>${sumHtml}</div>
+      <div class="card"><h3>Quick metrics (auto-score)</h3>${metrics}</div>
+      <div class="card"><h3>Signals</h3>${sumHtml}</div>
       <div class="card"><h3>Financials</h3>${finHtml}</div>
-      <div class="card"><h3>Unit mix (in-place vs market)</h3>${umHtml}</div>
+      <div class="card"><h3>Unit mix</h3>${umHtml}</div>
       <div class="card wide"><h3>Price &amp; status history</h3>${histHtml}</div>
       <div class="card wide"><h3>Comps — ${c.basis||''}</h3>${compHtml}</div>
-      <div class="card wide"><h3>Links</h3>${linksHtml}</div>
-    </div>`;
+      <div class="card wide"><h3>Links</h3>${linksHtml}</div></div>`;
 }
-function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.style.opacity=1;
-  clearTimeout(t._h); t._h=setTimeout(()=>t.style.opacity=0,1800); }
 
-function showLogin(){ document.getElementById('login').style.display='flex'; document.getElementById('pw').focus(); }
-function hideLogin(){ document.getElementById('login').style.display='none'; }
-async function doLogin(e){ e.preventDefault();
-  const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({password:document.getElementById('pw').value})});
-  if(r.ok){ document.getElementById('loginerr').textContent=''; load(); }
-  else document.getElementById('loginerr').textContent='Wrong password';
-  return false; }
-async function logout(){ await fetch('/api/logout',{method:'POST'}); showLogin(); }
-
-// wire filters (debounced) + initial load
-let deb; document.querySelectorAll('.filters input,.filters select').forEach(el=>{
-  el.addEventListener('input',()=>{ clearTimeout(deb); deb=setTimeout(load,250); }); });
-buildHead(); load();
+/* toast + boot */
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.opacity=1;clearTimeout(t._h);t._h=setTimeout(()=>t.style.opacity=0,1800);}
+async function boot(){
+  let start='live';try{const s=localStorage.getItem('rtp_tab');if(s&&document.getElementById(s))start=s;}catch(e){}
+  // probe auth via pipeline; on 401 the login shows
+  try{await api('/api/health');}catch(e){return;}
+  show(start);
+}
+boot();
 </script>
 </body>
 </html>
