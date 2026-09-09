@@ -11,8 +11,8 @@
   --bg:#e9edeb; --surface:#fff; --surface-2:#f4f7f5; --raise:0 1px 2px rgba(16,32,30,.06),0 8px 24px rgba(16,32,30,.05);
   --ink:#10201e; --ink-2:#3b4a47; --muted:#6c7d79; --line:#dde4e1; --line-2:#cdd6d3;
   --brand:#0f5c56; --brand-2:#14746c; --accent:#a9761f; --accent-soft:#f0e5cf;
-  --st-active:#1c8a5a; --st-comp:#3a6ea5; --st-passed:#93a3a0; --st-review:#bf8a24; --st-lost:#b0503f;
-  --st-active-bg:#e4f2ea; --st-comp-bg:#e6eef7; --st-passed-bg:#eef2f0; --st-review-bg:#f7edd6; --st-lost-bg:#f6e6e2;
+  --st-active:#1c8a5a; --st-comp:#3a6ea5; --st-passed:#93a3a0; --st-review:#bf8a24; --st-lost:#b0503f; --st-owned:#6a58a6;
+  --st-active-bg:#e4f2ea; --st-comp-bg:#e6eef7; --st-passed-bg:#eef2f0; --st-review-bg:#f7edd6; --st-lost-bg:#f6e6e2; --st-owned-bg:#ece7f6;
   --font-display:'Fraunces',Georgia,serif; --font-sans:'IBM Plex Sans',system-ui,-apple-system,sans-serif;
   --font-mono:'IBM Plex Mono',ui-monospace,monospace;
 }
@@ -20,15 +20,15 @@
   --bg:#0b1211; --surface:#121d1b; --surface-2:#16211f; --raise:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
   --ink:#eaf1ee; --ink-2:#c3cfcb; --muted:#8fa19d; --line:#243532; --line-2:#2e413d;
   --brand:#41b4a6; --brand-2:#5ccabb; --accent:#d5a24d; --accent-soft:#3a3016;
-  --st-active:#33a970; --st-comp:#5f92c6; --st-passed:#7f918d; --st-review:#dfa941; --st-lost:#d1725f;
-  --st-active-bg:#123024; --st-comp-bg:#152538; --st-passed-bg:#1b2725; --st-review-bg:#2e2612; --st-lost-bg:#31201c;
+  --st-active:#33a970; --st-comp:#5f92c6; --st-passed:#7f918d; --st-review:#dfa941; --st-lost:#d1725f; --st-owned:#9585cc;
+  --st-active-bg:#123024; --st-comp-bg:#152538; --st-passed-bg:#1b2725; --st-review-bg:#2e2612; --st-lost-bg:#31201c; --st-owned-bg:#211b33;
 }}
 :root[data-theme="dark"]{
   --bg:#0b1211; --surface:#121d1b; --surface-2:#16211f; --raise:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
   --ink:#eaf1ee; --ink-2:#c3cfcb; --muted:#8fa19d; --line:#243532; --line-2:#2e413d;
   --brand:#41b4a6; --brand-2:#5ccabb; --accent:#d5a24d; --accent-soft:#3a3016;
-  --st-active:#33a970; --st-comp:#5f92c6; --st-passed:#7f918d; --st-review:#dfa941; --st-lost:#d1725f;
-  --st-active-bg:#123024; --st-comp-bg:#152538; --st-passed-bg:#1b2725; --st-review-bg:#2e2612; --st-lost-bg:#31201c;
+  --st-active:#33a970; --st-comp:#5f92c6; --st-passed:#7f918d; --st-review:#dfa941; --st-lost:#d1725f; --st-owned:#9585cc;
+  --st-active-bg:#123024; --st-comp-bg:#152538; --st-passed-bg:#1b2725; --st-review-bg:#2e2612; --st-lost-bg:#31201c; --st-owned-bg:#211b33;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-sans);font-size:14.5px;line-height:1.5;-webkit-font-smoothing:antialiased}
@@ -70,7 +70,7 @@ main{padding:26px 0 70px}
 .pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
 .pill.underwriting,.pill.lead,.pill.loi_sent,.pill.under_contract{color:var(--st-active);background:var(--st-active-bg)}
 .pill.comp_only{color:var(--st-comp);background:var(--st-comp-bg)} .pill.passed,.pill.lost{color:var(--st-passed);background:var(--st-passed-bg)}
-.pill.needs_review{color:var(--st-review);background:var(--st-review-bg)}
+.pill.needs_review{color:var(--st-review);background:var(--st-review-bg)} .pill.owned{color:var(--st-owned);background:var(--st-owned-bg)}
 .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:11px;overflow:hidden;margin-top:16px}
 .metric{background:var(--surface);padding:12px 14px} .metric .k{font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .metric .val{font-family:var(--font-display);font-size:20px;font-weight:500;margin-top:3px} .metric .val.pend{font-family:var(--font-sans);font-size:12.5px;color:var(--muted);font-style:italic}
@@ -97,7 +97,7 @@ tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
 .stat{font-size:11px;font-weight:500;font-family:var(--font-mono);padding:3px 8px;border-radius:8px}
 .stat.lead,.stat.underwriting,.stat.loi_sent,.stat.under_contract{background:var(--st-active-bg);color:var(--st-active)}
 .stat.comp_only{background:var(--st-comp-bg);color:var(--st-comp)} .stat.passed,.stat.lost{background:var(--st-passed-bg);color:var(--st-passed)}
-.stat.needs_review{background:var(--st-review-bg);color:var(--st-review)}
+.stat.needs_review{background:var(--st-review-bg);color:var(--st-review)} .stat.owned{background:var(--st-owned-bg);color:var(--st-owned)}
 .badge{font-size:10.5px;font-weight:600;font-family:var(--font-mono);padding:3px 8px;border-radius:8px;color:#fff}
 .badge.Priority{background:var(--st-active)} .badge.Watch{background:var(--st-review)} .badge.Pass{background:var(--st-passed)}
 .empty{padding:26px;color:var(--muted);text-align:center}
@@ -176,6 +176,7 @@ tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
       <label>Units ≤<input id="f-umax" type="number" min="0"></label>
       <div class="toggles">
         <label><input type="checkbox" id="t-comps"> comps</label>
+        <label><input type="checkbox" id="t-owned"> owned</label>
         <label><input type="checkbox" id="t-needs"> needs review</label>
         <label><input type="checkbox" id="t-quiet"> incl. quiet</label>
         <label><input type="checkbox" id="t-closed"> passed/lost</label>
@@ -210,6 +211,7 @@ tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
 <script>
 const STATUS={underwriting:{c:'var(--st-active)',bg:'var(--st-active-bg)',label:'Underwriting'},lead:{c:'var(--st-active)',bg:'var(--st-active-bg)',label:'Lead'},
   loi_sent:{c:'var(--st-active)',bg:'var(--st-active-bg)',label:'LOI sent'},under_contract:{c:'var(--st-active)',bg:'var(--st-active-bg)',label:'Under contract'},
+  owned:{c:'var(--st-owned)',bg:'var(--st-owned-bg)',label:'Owned'},
   comp_only:{c:'var(--st-comp)',bg:'var(--st-comp-bg)',label:'Comp'},passed:{c:'var(--st-passed)',bg:'var(--st-passed-bg)',label:'Passed'},
   needs_review:{c:'var(--st-review)',bg:'var(--st-review-bg)',label:'Needs review'},lost:{c:'var(--st-lost)',bg:'var(--st-lost-bg)',label:'Lost'}};
 const money=c=>c==null?'—':'$'+Math.round(c/100).toLocaleString();          // cents -> $
@@ -293,7 +295,7 @@ let DEALS=[],sortCol=null,sortDir=-1;
 const val=id=>document.getElementById(id).value.trim(),chk=id=>document.getElementById(id).checked;
 function qs(){const p=new URLSearchParams();const m={'f-tier':'tier','f-city':'city','f-umin':'units_min','f-umax':'units_max'};
   for(const[id,key]of Object.entries(m)){const v=val(id);if(v)p.set(key,v);}
-  if(chk('t-comps'))p.set('comps','true');if(chk('t-needs'))p.set('needs_review','true');if(chk('t-quiet'))p.set('quiet','true');if(chk('t-closed'))p.set('closed','true');
+  if(chk('t-comps'))p.set('comps','true');if(chk('t-owned'))p.set('owned','true');if(chk('t-needs'))p.set('needs_review','true');if(chk('t-quiet'))p.set('quiet','true');if(chk('t-closed'))p.set('closed','true');
   return p.toString();}
 async function loadDeals(){
   try{const d=await(await api('/api/deals?'+qs())).json();DEALS=d.deals;
@@ -405,6 +407,7 @@ function renderDetail(d,c){
       <button onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'underwriting')">→ Underwriting</button>
       <button onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'loi_sent')">→ LOI sent</button>
       <button onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'under_contract')">→ Under contract</button>
+      <button onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'owned')">→ Owned</button>
       <button class="danger" onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'passed')">→ Passed</button>
       <button class="danger" onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'lost')">→ Lost</button>
       <button class="ok" onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'lead')">Reactivate</button></div>

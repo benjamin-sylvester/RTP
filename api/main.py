@@ -70,7 +70,8 @@ def list_deals(
     units_max: int | None = None,
     score_min: int | None = None,
     status: str | None = Query(None, description="comma list; overrides default active set"),
-    comps: bool = False, needs_review: bool = False, closed: bool = False, quiet: bool = False,
+    comps: bool = False, needs_review: bool = False, closed: bool = False,
+    owned: bool = False, quiet: bool = False,
     sort: str = "default", order: str = "desc",
     limit: int = 200, offset: int = 0,
     _auth=Depends(require_auth),
@@ -86,6 +87,8 @@ def list_deals(
             statuses.append("needs_review")
         if closed:
             statuses += ["passed", "lost"]
+        if owned:
+            statuses.append("owned")
 
     # recency: only LEADS must be seen within active_lead_days to count as active (a lead
     # gone quiet drops out by date). Manually-advanced deals (underwriting+) and comps/passed

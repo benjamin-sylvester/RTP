@@ -6,10 +6,11 @@ from psycopg.rows import tuple_row
 from ingest import routing
 
 ACTIVE_STATUSES = ("lead", "underwriting", "loi_sent", "under_contract")
-# statuses a human may set from the dashboard / CLI
-MANUAL_TARGETS = ("underwriting", "loi_sent", "under_contract", "lost", "passed", "lead")
+# statuses a human may set from the dashboard / CLI. 'owned' = an acquired asset
+# in the portfolio: past the pipeline, not a loss/pass, tracked separately.
+MANUAL_TARGETS = ("underwriting", "loi_sent", "under_contract", "owned", "lost", "passed", "lead")
 VALID = ("comp_only", "lead", "underwriting", "loi_sent", "under_contract",
-         "lost", "passed", "needs_review")
+         "owned", "lost", "passed", "needs_review")
 
 
 def active_lead_days():
