@@ -141,11 +141,17 @@ def pipeline(_auth=Depends(require_auth)):
 
 @app.get("/api/map")
 def map_data(_auth=Depends(require_auth)):
-    """Every tracked property (lite) — feeds the Map + Stats tabs."""
+    """Every tracked property with the fields the Map + Analytics tabs slice on:
+    price/unit, cap (financials or synced model), tier, score, ingest date."""
     rows = db.query(
-        "SELECT id, address, city, state, units, price_per_unit, asking_price, status, "
-        "  account, source, year_built, latitude, longitude "
-        "FROM listings WHERE package_id IS NULL")
+        "SELECT l.id, l.address, l.city, l.state, l.units, l.price_per_unit, l.asking_price, "
+        "  l.status, l.account, l.source, l.year_built, l.latitude, l.longitude, "
+        "  l.date_ingested, lf.cap_rate AS lf_cap, au.implied_cap_current AS au_cap, "
+        "  au.tier, au.score, (au.model_stats IS NOT NULL) AS has_model "
+        "FROM listings l "
+        "LEFT JOIN listing_financials lf ON lf.listing_id = l.id "
+        "LEFT JOIN auto_underwriting au ON au.listing_id = l.id "
+        "WHERE l.package_id IS NULL")
     return {"count": len(rows), "listings": rows}
 
 

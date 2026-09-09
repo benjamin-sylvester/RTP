@@ -124,6 +124,17 @@ tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
 .track{height:11px;background:var(--surface-2);border-radius:6px;overflow:hidden} .fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--brand),var(--brand-2))} .row .rv{font-family:var(--font-mono);font-size:12px;color:var(--ink-2);text-align:right}
 .statusbar{display:flex;height:15px;border-radius:8px;overflow:hidden;border:1px solid var(--line)} .statusbar .seg{height:100%}
 .statuskey{display:flex;gap:13px;flex-wrap:wrap;margin-top:11px} .statuskey .li{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2)} .statuskey .li .sw{width:10px;height:10px;border-radius:3px} .statuskey .li b{font-family:var(--font-mono);color:var(--ink)}
+/* analytics */
+.afilters{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-bottom:18px}
+.afilters .glab{font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 3px 0 10px} .afilters .glab.first{margin-left:0}
+.chip{font-size:12px;padding:4px 10px;border:1px solid var(--line-2);border-radius:999px;background:var(--surface);color:var(--ink-2);cursor:pointer;white-space:nowrap}
+.chip:hover{border-color:var(--brand)} .chip.on{background:var(--brand);color:var(--surface);border-color:var(--brand)} .chip.clear{color:var(--muted);border-style:dashed}
+.agrid{display:grid;grid-template-columns:1fr 1fr;gap:18px} .agrid .span2{grid-column:1/-1}
+@media(max-width:760px){.agrid{grid-template-columns:1fr}}
+.plot{width:100%;overflow-x:auto} .plot svg{display:block;width:100%;height:auto} .plot .dot{cursor:pointer;transition:opacity .12s}
+.row.click{cursor:pointer} .row.click:hover .rl{color:var(--brand)} .row.on .rl{color:var(--brand);font-weight:600} .row .rv small{color:var(--muted);font-weight:400}
+.atip{position:absolute;pointer-events:none;opacity:0;transform:translate(-50%,-118%);background:var(--ink);color:var(--surface);font-size:12px;padding:6px 9px;border-radius:8px;white-space:nowrap;z-index:6;transition:opacity .1s;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+[data-theme="dark"] .atip,:root:not([data-theme="light"]) .atip{background:#04122a}
 /* detail */
 #detail{max-width:1000px;margin:0 auto} .back{display:inline-block;margin-bottom:12px;color:var(--brand-2);cursor:pointer;font-size:13px}
 .dhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:3px} .dhead h2{font-size:24px}
@@ -158,7 +169,7 @@ tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
     <button class="tab" role="tab" data-panel="live" aria-selected="true">Live Pipeline</button>
     <button class="tab" role="tab" data-panel="deals" aria-selected="false">Deals</button>
     <button class="tab" role="tab" data-panel="map" aria-selected="false">Map</button>
-    <button class="tab" role="tab" data-panel="stats" aria-selected="false">Stats</button>
+    <button class="tab" role="tab" data-panel="stats" aria-selected="false">Analytics</button>
   </nav>
   <button class="iconbtn" id="theme" title="Toggle theme">◐</button>
   <button class="iconbtn" onclick="logout()">Log out</button>
@@ -196,15 +207,18 @@ tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
     <div class="section-head"><div><div class="eyebrow">Every tracked property · geocoded</div><h2>Footprint</h2></div><div class="note" id="map-note"></div></div>
     <div class="mapcard"><div class="mapwrap" id="mapwrap"><div class="tooltip" id="mtip"></div></div><div class="legend" id="legend"></div></div>
   </section>
-  <!-- STATS -->
+  <!-- ANALYTICS -->
   <section class="panel" id="stats">
-    <div class="section-head"><div><div class="eyebrow">Portfolio &amp; comp intelligence</div><h2>Stats</h2></div><div class="note" id="stats-note"></div></div>
+    <div class="section-head"><div><div class="eyebrow">Slice the database · click anything to filter</div><h2>Analytics</h2></div><div class="note" id="stats-note"></div></div>
+    <div class="afilters" id="afilters"></div>
     <div class="kpis" id="kpis"></div>
-    <div class="charts">
-      <div class="chartcard"><h3>Deals by market</h3><div class="sub">Where the flow concentrates</div><div class="rows" id="byMarket"></div></div>
-      <div class="chartcard"><h3>Median $/unit by market</h3><div class="sub">Comp basis · markets with 2+ priced deals</div><div class="rows" id="byPPU"></div></div>
+    <div class="agrid">
+      <div class="chartcard span2"><h3>Price / unit vs unit count</h3><div class="sub">Each property a dot, colored by status. Shaded band = buy box (4–34 units). Click a dot to open it.</div><div class="plot" id="scatter"></div></div>
+      <div class="chartcard"><h3>By market</h3><div class="sub">Median $/unit · deal count. Click a market to filter.</div><div class="rows" id="byMarket"></div></div>
+      <div class="chartcard"><h3>Pipeline funnel</h3><div class="sub">Where deals sit — and where they exit. Click a stage to filter.</div><div class="rows" id="funnel"></div></div>
+      <div class="chartcard"><h3>Deal flow over time</h3><div class="sub">Properties ingested per month</div><div class="plot" id="timeline"></div></div>
+      <div class="chartcard"><h3>$/unit distribution</h3><div class="sub">Pricing landscape of the current slice</div><div class="plot" id="ppuHist"></div></div>
     </div>
-    <div class="chartcard" style="margin-top:18px"><h3>Database by status</h3><div class="sub">Nothing deleted — passed &amp; comps stay as history and reference</div><div class="statusbar" id="statusbar"></div><div class="statuskey" id="statuskey"></div></div>
   </section>
 
   <section class="panel" id="detailpanel"><div id="detail"></div></section>
@@ -349,27 +363,94 @@ function drawMap(listings){
   document.getElementById('map-note').textContent=pts.length+' of '+listings.length+' geocoded';
 }
 
-/* ---- STATS ---- */
-async function loadStats(){if(!CACHE.map){try{const d=await(await api('/api/map')).json();CACHE.map=d.listings;}catch(e){return;}}
-  if(!CACHE.pipeline){try{CACHE.pipeline=await(await api('/api/pipeline')).json();}catch(e){}}renderStats();}
-function renderStats(){
-  const L=CACHE.map,P=(CACHE.pipeline&&CACHE.pipeline.deals)||[];
-  const priced=L.filter(r=>r.price_per_unit);const med=a=>{const s=[...a].sort((x,y)=>x-y),m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2;};
-  const basis=x=>{const s=x.model_stats&&x.model_stats.canonical;return s&&s.purchase_price!=null?s.purchase_price*100:x.asking_price;};
-  const active=P.reduce((a,x)=>a+(basis(x)||0),0);
-  const kpis=[['Active pipeline',fmtD(active/100)||'—',P.length+' deals'],['Pipeline units',P.reduce((a,x)=>a+(x.units||0),0),new Set(P.map(x=>x.city)).size+' markets'],
-    ['Comps tracked',L.filter(r=>r.status==='comp_only').length,'sale-comp DB'],['Median $/unit',priced.length?money(med(priced.map(r=>r.price_per_unit))):'—',priced.length+' priced'],['Total tracked',L.length,'nothing deleted']];
-  document.getElementById('kpis').innerHTML=kpis.map(([k,v,s])=>`<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div><div class="sub">${s}</div></div>`).join('');
-  const mc={};L.forEach(r=>{if(r.city&&r.city!=='Unknown')mc[r.city]=(mc[r.city]||0)+1;});
-  const top=Object.entries(mc).sort((a,b)=>b[1]-a[1]).slice(0,8),mx=Math.max(...top.map(t=>t[1]),1);
-  document.getElementById('byMarket').innerHTML=top.map(([c,n])=>`<div class="row"><div class="rl">${c}</div><div class="track"><div class="fill" style="width:${n/mx*100}%"></div></div><div class="rv">${n}</div></div>`).join('');
-  const mp={};priced.forEach(r=>{(mp[r.city]=mp[r.city]||[]).push(r.price_per_unit);});
-  const pp=Object.entries(mp).filter(([,a])=>a.length>=2).map(([c,a])=>[c,med(a)]).sort((a,b)=>b[1]-a[1]).slice(0,8),pmx=Math.max(...pp.map(t=>t[1]),1);
-  document.getElementById('byPPU').innerHTML=pp.map(([c,v])=>`<div class="row"><div class="rl">${c}</div><div class="track"><div class="fill" style="width:${v/pmx*100}%"></div></div><div class="rv">${money(v)}</div></div>`).join('');
-  const sc={};L.forEach(r=>{sc[r.status]=(sc[r.status]||0)+1;});const so=['underwriting','lead','comp_only','needs_review','passed','lost'].filter(s=>sc[s]);
-  document.getElementById('statusbar').innerHTML=so.map(s=>`<div class="seg" style="width:${sc[s]/L.length*100}%;background:${STATUS[s].c}" title="${STATUS[s].label}: ${sc[s]}"></div>`).join('');
-  document.getElementById('statuskey').innerHTML=so.map(s=>`<span class="li"><span class="sw" style="background:${STATUS[s].c}"></span>${STATUS[s].label} <b>${sc[s]}</b></span>`).join('');
-  document.getElementById('stats-note').textContent=L.length+' properties';
+/* ---- ANALYTICS (cross-filtered) ---- */
+const AF={markets:new Set(),statuses:new Set(),sources:new Set()};
+const amed=a=>{if(!a.length)return null;const s=[...a].sort((x,y)=>x-y),m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2;};
+const srcKey=s=>['mls_export','mlspin','primemls'].includes(s)?'MLS':'Broker';
+const capOf=r=>r.au_cap!=null?+r.au_cap:(r.lf_cap!=null?+r.lf_cap:null);
+let ATIP;
+function atip(html,x,y){if(!ATIP){ATIP=document.createElement('div');ATIP.className='atip';ATIP.style.position='fixed';document.body.appendChild(ATIP);}ATIP.innerHTML=html;ATIP.style.left=x+'px';ATIP.style.top=y+'px';ATIP.style.opacity=1;}
+function atipHide(){if(ATIP)ATIP.style.opacity=0;}
+async function loadStats(){
+  if(!CACHE.map){try{CACHE.map=(await(await api('/api/map')).json()).listings;}catch(e){return;}}
+  renderAnalytics();
+}
+function AData(){return CACHE.map.filter(r=>{
+  if(AF.markets.size&&!AF.markets.has(r.city))return false;
+  if(AF.statuses.size&&!AF.statuses.has(r.status))return false;
+  if(AF.sources.size&&!AF.sources.has(srcKey(r.source)))return false;
+  return true;});}
+function toggle(set,v){set.has(v)?set.delete(v):set.add(v);renderAnalytics();}
+function clearAF(){AF.markets.clear();AF.statuses.clear();AF.sources.clear();renderAnalytics();}
+function renderAnalytics(){
+  const all=CACHE.map,L=AData();
+  renderAFilters(all);renderAKPIs(L);renderScatter(L);renderAMarket(L);renderAFunnel(L);renderATimeline(L);renderAHist(L);
+  const nf=AF.markets.size+AF.statuses.size+AF.sources.size;
+  document.getElementById('stats-note').textContent=L.length+' of '+all.length+' properties'+(nf?' · filtered':'');
+}
+function achip(label,on,onclick){return `<button class="chip${on?' on':''}" onclick="${onclick}">${label}</button>`;}
+function renderAFilters(all){
+  const markets=Object.entries(all.reduce((a,r)=>{if(r.city&&r.city!=='Unknown')a[r.city]=(a[r.city]||0)+1;return a;},{})).sort((a,b)=>b[1]-a[1]).slice(0,10).map(x=>x[0]);
+  let h='<span class="glab first">Market</span>'+markets.map(m=>achip(m,AF.markets.has(m),`toggle(AF.markets,'${m.replace(/'/g,"\\'")}')`)).join('');
+  h+='<span class="glab">Status</span>'+['underwriting','lead','comp_only','needs_review','passed','owned'].map(s=>achip((STATUS[s]||{}).label||s,AF.statuses.has(s),`toggle(AF.statuses,'${s}')`)).join('');
+  h+='<span class="glab">Source</span>'+['MLS','Broker'].map(s=>achip(s,AF.sources.has(s),`toggle(AF.sources,'${s}')`)).join('');
+  if(AF.markets.size+AF.statuses.size+AF.sources.size)h+=`<button class="chip clear" onclick="clearAF()">✕ clear</button>`;
+  document.getElementById('afilters').innerHTML=h;
+}
+function renderAKPIs(L){
+  const priced=L.filter(r=>r.price_per_unit),capped=L.map(capOf).filter(c=>c!=null);
+  const val=L.reduce((a,r)=>a+(r.asking_price||0),0),box=L.filter(r=>r.units&&r.units>=4&&r.units<=34).length;
+  const k=[['Properties',L.length,''],['Median $/unit',priced.length?money(amed(priced.map(r=>r.price_per_unit))):'—',priced.length+' priced'],
+    ['Median cap',capped.length?(amed(capped)*100).toFixed(1)+'%':'—',capped.length+' with cap'],
+    ['Total ask',fmtD(val/100)||'—',''],['In buy box',L.length?Math.round(box/L.length*100)+'%':'—','4–34 units']];
+  document.getElementById('kpis').innerHTML=k.map(([a,b,c])=>`<div class="kpi"><div class="k">${a}</div><div class="v">${b}</div><div class="sub">${c}</div></div>`).join('');
+}
+function renderScatter(L){
+  const el=document.getElementById('scatter');
+  const pts=L.filter(r=>r.units&&r.price_per_unit).map(r=>({...r,ppu:r.price_per_unit/100}));
+  if(!pts.length){el.innerHTML='<div class="mut" style="padding:24px">No priced deals in this slice.</div>';return;}
+  const W=760,H=380,ml=58,mr=16,mt=16,mb=34;
+  const uMax=Math.max(40,...pts.map(p=>p.units))*1.05,yMax=Math.max(...pts.map(p=>p.ppu))*1.08;
+  const sx=u=>ml+(u/uMax)*(W-ml-mr),sy=v=>H-mb-(v/yMax)*(H-mt-mb);
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Price per unit versus unit count">`;
+  s+=`<rect x="${sx(4).toFixed(1)}" y="${mt}" width="${(sx(34)-sx(4)).toFixed(1)}" height="${H-mt-mb}" fill="var(--accent)" fill-opacity="0.08"/>`;
+  s+=`<text x="${((sx(4)+sx(34))/2).toFixed(1)}" y="${mt+11}" text-anchor="middle" font-family="var(--font-mono)" font-size="9" fill="var(--accent)" opacity=".85">BUY BOX</text>`;
+  for(let i=0;i<=4;i++){const v=yMax*i/4,y=sy(v).toFixed(1);s+=`<line x1="${ml}" y1="${y}" x2="${W-mr}" y2="${y}" stroke="var(--line)"/><text x="${ml-8}" y="${(+y+3).toFixed(1)}" text-anchor="end" font-family="var(--font-mono)" font-size="9.5" fill="var(--muted)">$${Math.round(v/1000)}k</text>`;}
+  [0,10,20,30,40,50,60].filter(u=>u<=uMax).forEach(u=>{s+=`<text x="${sx(u).toFixed(1)}" y="${H-mb+16}" text-anchor="middle" font-family="var(--font-mono)" font-size="9.5" fill="var(--muted)">${u}</text>`;});
+  s+=`<text x="${(ml+(W-ml-mr)/2).toFixed(1)}" y="${H-3}" text-anchor="middle" font-family="var(--font-mono)" font-size="10" fill="var(--muted)">units</text>`;
+  pts.forEach(p=>{const st=STATUS[p.status]||STATUS.comp_only;s+=`<circle class="dot" data-id="${p.id}" data-t="${(p.address||'—').replace(/"/g,'')}|${p.city} ${p.state}|${p.units}u · $${Math.round(p.ppu/1000)}k/u · ${st.label}" cx="${sx(p.units).toFixed(1)}" cy="${sy(p.ppu).toFixed(1)}" r="5" fill="${st.c}" fill-opacity=".82" stroke="var(--surface)"/>`;});
+  s+=`</svg>`;el.innerHTML=s;
+  el.querySelectorAll('.dot').forEach(c=>{c.addEventListener('mousemove',e=>{const[a,b,d]=c.dataset.t.split('|');atip(`<b>${a}</b><br><span class="mono" style="opacity:.85">${b} · ${d}</span>`,e.clientX,e.clientY-8);});c.addEventListener('mouseleave',atipHide);c.addEventListener('click',()=>{atipHide();openDeal('listing',+c.dataset.id);});});
+}
+function renderAMarket(L){
+  const mp={};L.filter(r=>r.price_per_unit).forEach(r=>{if(r.city&&r.city!=='Unknown')(mp[r.city]=mp[r.city]||[]).push(r.price_per_unit);});
+  const rows=Object.entries(mp).map(([c,a])=>[c,amed(a),a.length]).sort((a,b)=>b[1]-a[1]).slice(0,9),mx=Math.max(...rows.map(r=>r[1]),1);
+  document.getElementById('byMarket').innerHTML=rows.length?rows.map(([c,v,n])=>`<div class="row click${AF.markets.has(c)?' on':''}" onclick="toggle(AF.markets,'${c.replace(/'/g,"\\'")}')"><div class="rl">${c}</div><div class="track"><div class="fill" style="width:${(v/mx*100).toFixed(0)}%"></div></div><div class="rv">${money(v)} <small>· ${n}</small></div></div>`).join(''):'<div class="mut">No priced deals.</div>';
+}
+function renderAFunnel(L){
+  const order=[['comp_only','Comp'],['lead','Lead'],['underwriting','Underwriting'],['loi_sent','LOI sent'],['under_contract','Under contract'],['owned','Owned'],['passed','Passed'],['lost','Lost'],['needs_review','Needs review']];
+  const sc={};L.forEach(r=>sc[r.status]=(sc[r.status]||0)+1);
+  const rows=order.filter(([s])=>sc[s]),mx=Math.max(...rows.map(([s])=>sc[s]),1);
+  document.getElementById('funnel').innerHTML=rows.map(([s,lab])=>`<div class="row click${AF.statuses.has(s)?' on':''}" onclick="toggle(AF.statuses,'${s}')"><div class="rl">${lab}</div><div class="track"><div class="fill" style="width:${(sc[s]/mx*100).toFixed(0)}%;background:${STATUS[s].c}"></div></div><div class="rv">${sc[s]}</div></div>`).join('');
+}
+function renderATimeline(L){
+  const mc={};L.forEach(r=>{if(r.date_ingested){const m=r.date_ingested.slice(0,7);mc[m]=(mc[m]||0)+1;}});
+  const months=Object.keys(mc).sort().slice(-12),mx=Math.max(...months.map(m=>mc[m]),1);
+  const W=360,H=150,pad=20,bw=months.length?(W-2*pad)/months.length:0;
+  let s=`<svg viewBox="0 0 ${W} ${H}">`;
+  months.forEach((m,i)=>{const h=(mc[m]/mx)*(H-pad-26),x=pad+i*bw;s+=`<rect x="${(x+2).toFixed(1)}" y="${(H-24-h).toFixed(1)}" width="${(bw-4).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="var(--brand)"/><text x="${(x+bw/2).toFixed(1)}" y="${(H-26-h).toFixed(1)}" text-anchor="middle" font-family="var(--font-mono)" font-size="9" fill="var(--muted)">${mc[m]}</text>`;if(i%2===0||months.length<=6)s+=`<text x="${(x+bw/2).toFixed(1)}" y="${H-9}" text-anchor="middle" font-family="var(--font-mono)" font-size="8.5" fill="var(--muted)">${m.slice(2)}</text>`;});
+  s+=`</svg>`;document.getElementById('timeline').innerHTML=months.length?s:'<div class="mut">No dates.</div>';
+}
+function renderAHist(L){
+  const vals=L.filter(r=>r.price_per_unit).map(r=>r.price_per_unit/100/1000);
+  const el=document.getElementById('ppuHist');
+  if(!vals.length){el.innerHTML='<div class="mut">No priced deals.</div>';return;}
+  const buckets=[[0,50],[50,100],[100,150],[150,200],[200,250],[250,1e9]],labels=['<50k','50–100','100–150','150–200','200–250','250k+'];
+  const cnt=buckets.map(([lo,hi])=>vals.filter(v=>v>=lo&&v<hi).length),mx=Math.max(...cnt,1);
+  const W=360,H=150,pad=20,bw=(W-2*pad)/buckets.length;
+  let s=`<svg viewBox="0 0 ${W} ${H}">`;
+  cnt.forEach((c,i)=>{const h=(c/mx)*(H-pad-30),x=pad+i*bw;s+=`<rect x="${(x+2).toFixed(1)}" y="${(H-30-h).toFixed(1)}" width="${(bw-4).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="var(--accent)"/><text x="${(x+bw/2).toFixed(1)}" y="${H-18}" text-anchor="middle" font-family="var(--font-mono)" font-size="8" fill="var(--muted)">${labels[i]}</text>${c?`<text x="${(x+bw/2).toFixed(1)}" y="${(H-32-h).toFixed(1)}" text-anchor="middle" font-family="var(--font-mono)" font-size="9" fill="var(--muted)">${c}</text>`:''}`;});
+  s+=`</svg>`;el.innerHTML=s;
 }
 
 /* ---- DETAIL ---- */
