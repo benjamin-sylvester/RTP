@@ -168,6 +168,7 @@ def deal_detail(kind: str, deal_id: int, _auth=Depends(require_auth)):
     if kind == "listing":
         detail["listing"] = db.one(
             "SELECT id, address, city, state, zip, units, asking_price, price_per_unit, "
+            "sale_price, sale_price_per_unit, sale_date, "
             "year_built, building_sf, property_class, source, broker_name, broker_email, "
             "listing_date, last_seen_at, notes, drive_folder_id, om_url, boe_url, raw_email_id "
             "FROM listings WHERE id=%s", (deal_id,))
@@ -204,7 +205,7 @@ def deal_comps(kind: str, deal_id: int, radius_miles: float = 10, limit: int = 2
 
     if lat is not None and lon is not None:
         rows = db.query(
-            """SELECT id, address, city, state, units, asking_price, price_per_unit, status,
+            """SELECT id, address, city, state, units, asking_price, price_per_unit, status, sale_price, sale_price_per_unit, sale_date,
                       ROUND(haversine_miles(%s::numeric, %s::numeric, latitude, longitude), 2) AS miles
                FROM listings
                WHERE latitude IS NOT NULL AND id <> %s
@@ -216,7 +217,7 @@ def deal_comps(kind: str, deal_id: int, radius_miles: float = 10, limit: int = 2
         basis = f"within {radius_miles} mi"
     else:  # no coords (e.g. package) -> same market
         rows = db.query(
-            "SELECT id, address, city, state, units, asking_price, price_per_unit, status "
+            "SELECT id, address, city, state, units, asking_price, price_per_unit, status, sale_price, sale_price_per_unit, sale_date "
             "FROM listings WHERE lower(city)=lower(%s) AND id <> %s "
             "AND merged_into_id IS NULL AND status <> 'needs_review' "
             "AND COALESCE(address,'') NOT IN ('Unknown','') ORDER BY asking_price DESC LIMIT %s",

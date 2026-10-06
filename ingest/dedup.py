@@ -82,6 +82,19 @@ def _to_int(v):
     return int(m.group()) if m else None
 
 
+def _to_ratio(v):
+    """Normalize a rate to a decimal ratio: '8.00%' -> 0.08, 8 -> 0.08, 0.08 -> 0.08."""
+    if v is None or v == "":
+        return None
+    try:
+        f = float(str(v).replace("%", "").replace(",", "").strip())
+    except ValueError:
+        return None
+    if f > 1.0:
+        f = f / 100.0
+    return round(f, 4) if 0 < f < 1 else None
+
+
 def _within(a, b, pct=PCT):
     if a is None or b is None or a == 0:
         return False
@@ -136,7 +149,7 @@ def find_match(conn, cand):
     # prevents collapsing e.g. two distinct Fall River 6-units priced within 5%.
     cand_has_addr = bool(cand.get("address")) and not _blank(cand["address"])
     if city and cand.get("units"):
-        cand_price = cand.get("asking_price")
+        cand_price = cand.get("asking_price") or cand.get("sale_price")
         cand_gsi = cand.get("gross_revenue")
         rows = cur.execute(
             """
@@ -168,7 +181,7 @@ _LISTING_COLS = [
     ("latitude", False), ("longitude", False),
 ]
 _FIN_COLS = ["gross_revenue", "total_expenses", "noi"]  # cents
-_FIN_RAW = ["vacancy_rate"]  # ratio, as-is
+_FIN_RAW = ["vacancy_rate", "cap_rate"]  # ratios, normalized by _to_ratio
 
 
 def _log(cur, lid, field, old, new):
@@ -229,6 +242,26 @@ def enrich(conn, lid, cand, source_label=""):
             if "price_per_unit" not in changed:
                 changed.append("price_per_unit")
 
+    # executed sale (closing announcement): record the sale price beside the ask.
+    # A sold lead becomes a comp; manual/sticky statuses are left alone (the briefing
+    # flags a sale on a deal in the pipeline instead).
+    sale_cents = _cents(cand.get("sale_price")) if cand.get("_sold") else None
+    if sale_cents:
+        ex_sale, ex_status = cur.execute(
+            "SELECT sale_price, status FROM listings WHERE id=%s", (lid,)).fetchone()
+        if ex_sale != sale_cents:
+            _log(cur, lid, "sale_price", ex_sale, sale_cents)
+            updates["sale_price"] = sale_cents
+            changed.append("sale_price")
+            if units_final:
+                updates["sale_price_per_unit"] = round(sale_cents / units_final)
+            if cand.get("sale_date"):
+                updates["sale_date"] = cand["sale_date"]
+        if ex_status == "lead":
+            _log(cur, lid, "status", "lead", "comp_only")
+            updates["status"] = "comp_only"
+            changed.append("status")
+
     if updates:
         sets = ", ".join(f"{c}=%s" for c in updates)
         cur.execute(f"UPDATE listings SET {sets} WHERE id=%s",
@@ -236,16 +269,16 @@ def enrich(conn, lid, cand, source_label=""):
 
     # listing_financials: create or fill nulls
     fin_vals = {c: _cents(cand.get(c)) for c in _FIN_COLS}
-    fin_vals.update({c: cand.get(c) for c in _FIN_RAW})
+    fin_vals.update({c: _to_ratio(cand.get(c)) for c in _FIN_RAW})
     if any(v is not None for v in fin_vals.values()):
         frow = cur.execute(
-            "SELECT gross_revenue, total_expenses, noi, vacancy_rate, confidence "
+            "SELECT gross_revenue, total_expenses, noi, vacancy_rate, cap_rate, confidence "
             "FROM listing_financials WHERE listing_id=%s", (lid,)).fetchone()
         if frow is None:
             cur.execute(
                 "INSERT INTO listing_financials (listing_id) VALUES (%s)", (lid,))
-            frow = (None, None, None, None, None)
-        fcols = ["gross_revenue", "total_expenses", "noi", "vacancy_rate", "confidence"]
+            frow = (None, None, None, None, None, None)
+        fcols = ["gross_revenue", "total_expenses", "noi", "vacancy_rate", "cap_rate", "confidence"]
         fexist = dict(zip(fcols, frow))
         fupd = {}
         for c in _FIN_COLS + _FIN_RAW:
@@ -299,13 +332,20 @@ def insert_listing(conn, cand, source, raw_email_id=None, session=None, account=
     units = cand.get("units")
     ask_cents = _cents(cand.get("asking_price"))
     ppu = round(ask_cents / units) if (ask_cents and units) else None
+    sold = bool(cand.get("_sold"))
+    sale_cents = _cents(cand.get("sale_price")) if sold else None
+    sale_ppu = round(sale_cents / units) if (sale_cents and units) else None
     if is_orphan(cand):
         status = "needs_review"
         reasons = ["quarantined (no-orphan rule): no usable address and no MLS#"]
+    elif sold:
+        status = "comp_only"
+        reasons = ["executed sale (closing announcement) -> comp"]
     else:
         status, reasons = routing.route(cand.get("state"), cand.get("city"),
                                         units, cand.get("asking_price"))
-    raw = {k: cand.get(k) for k in ("unit_mix", "gross_revenue", "noi")}
+    raw = {k: cand.get(k) for k in ("unit_mix", "gross_revenue", "noi", "listing_status",
+                                    "cap_rate", "other_addresses")}
     raw.update({"geocode_method": method, "routing_reasons": reasons,
                 "ingest_source": source})
     cur.execute(
@@ -313,8 +353,8 @@ def insert_listing(conn, cand, source, raw_email_id=None, session=None, account=
         INSERT INTO listings (external_id, address, city, state, latitude, longitude,
             units, asking_price, price_per_unit, year_built, building_sf, status,
             source, broker_name, broker_email, listing_date, raw_email_id, raw_data,
-            notes, account)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s)
+            notes, account, sale_price, sale_price_per_unit, sale_date)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s)
         RETURNING id
         """,
         (str(cand["external_id"]) if cand.get("external_id") else None,
@@ -322,8 +362,12 @@ def insert_listing(conn, cand, source, raw_email_id=None, session=None, account=
          (cand.get("state") or "").strip(), lat, lon, units, ask_cents, ppu,
          cand.get("year_built"), cand.get("building_sf"), status, source,
          cand.get("broker_name"), cand.get("broker_email"), cand.get("listing_date"),
-         raw_email_id, json.dumps(raw, default=str), None, account))
-    return cur.fetchone()[0], status
+         raw_email_id, json.dumps(raw, default=str), None, account,
+         sale_cents, sale_ppu, cand.get("sale_date") if sold else None))
+    nid = cur.fetchone()[0]
+    if sale_cents:
+        _log(cur, nid, "sale_price", None, sale_cents)  # briefing picks closed sales up here
+    return nid, status
 
 
 # ---------------------------------------------------------------- packages
@@ -414,6 +458,12 @@ def upsert(conn, cand, source, raw_email_id=None, session=None, account=None):
     for f in ("units", "year_built", "building_sf", "lot_sf"):
         if cand.get(f) is not None:
             cand[f] = _to_int(cand[f])
+    # closing announcement -> executed-sale comp (see insert_listing / enrich)
+    cand["_sold"] = str(cand.get("listing_status") or "").strip().lower() == "sold"
+    if not cand["_sold"]:
+        cand.pop("sale_price", None)  # never trust a sale price on a non-sold record
+    if cand.get("sale_price") is not None:
+        cand["sale_price"] = _to_int(cand["sale_price"])
     link = try_link_package(conn, cand)
     if link:
         return {"action": "linked_package", "listing_id": None,

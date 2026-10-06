@@ -316,7 +316,7 @@ function renderLive(d){
 
 /* ---- DEALS TABLE ---- */
 const COLS=[{k:'name',t:'Address'},{k:'market',t:'City'},{k:'effective_units',t:'Units',n:true},
-  {k:'effective_ask',t:'Ask',n:true,money:true},{k:'price_per_unit',t:'$/Unit',n:true,money:true},
+  {k:'effective_ask',t:'Ask',n:true,money:true},{k:'price_per_unit',t:'$/Unit',n:true,money:true},{k:'sale_price',t:'Sold',n:true,money:true},
   {k:'tier',t:'Tier',badge:true},{k:'score',t:'Score',n:true},{k:'status',t:'Status',stat:true},
   {k:'source',t:'Source',src:true},{k:'last_seen_at',t:'Last seen',date:true}];
 let DEALS=[],sortCol=null,sortDir=-1;
@@ -492,16 +492,16 @@ function renderDetail(d,c){
   const finHtml=f?[['Gross rent',money(f.gross_revenue)],['NOI',money(f.noi)],['Total expenses',money(f.total_expenses)],['Cap rate',pct(f.cap_rate)],['Vacancy',pct(f.vacancy_rate)],['Source',`${f.data_source||'—'}/${f.confidence||'—'}`]]
     .filter(([k,v])=>v&&v!=='—'&&v!=='$NaN').map(([k,v])=>`<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('')||'<div class="mut">Not provided.</div>':'<div class="mut">Not provided.</div>';
   const um=d.unit_mix||[];const umHtml=um.length?`<table class="htbl"><tr><th>Type</th><th>#</th><th>In-place</th><th>Market</th></tr>${um.map(m=>`<tr><td>${m.unit_type||'—'}</td><td>${m.count??'—'}</td><td>${rentMo(m.avg_rent)}</td><td>${rentMo(m.market_rent)}</td></tr>`).join('')}</table>`:'<div class="mut">Not provided.</div>';
-  const comps=(c.comps||[]);const compHtml=comps.length?comps.map(x=>`<div class="comp"><span class="mi">${x.miles!=null?x.miles+' mi':''}</span><span>${x.address||'—'}, ${x.city} ${x.state} · ${x.units||'?'}u · <span class="stat ${x.status}">${(STATUS[x.status]||{}).label||x.status}</span></span><span>${money(x.asking_price)}${x.price_per_unit?`<br><span class="mut" style="font-size:11.5px">${money(x.price_per_unit)}/unit</span>`:''}</span></div>`).join(''):'<div class="mut">No comps found.</div>';
-  const allH=d.history||[];const h=allH.filter(x=>x.field==='asking_price'||x.field==='status'||(x.field||'').startsWith('uw.'));
-  const histHtml=h.length?`<table class="htbl"><tr><th>Date</th><th>Field</th><th>Change</th></tr>${h.slice(0,20).map(x=>{let chg;if(x.field==='asking_price'){const o=+x.old_value,n=+x.new_value,cut=n<o;chg=`<span class="${cut?'cut':'rise'}">${cut?'▼':'▲'} ${money(o)} → ${money(n)}</span>`;}else chg=`${x.old_value??'—'} → <b>${x.new_value??'—'}</b>`;return `<tr><td>${(x.changed_at||'').slice(0,10)}</td><td>${(x.field||'').replace('_',' ')}</td><td>${chg}</td></tr>`;}).join('')}</table>`:'<div class="mut">No changes recorded.</div>';
+  const comps=(c.comps||[]);const compHtml=comps.length?comps.map(x=>`<div class="comp"><span class="mi">${x.miles!=null?x.miles+' mi':''}</span><span>${x.address||'—'}, ${x.city} ${x.state} · ${x.units||'?'}u · <span class="stat ${x.status}">${(STATUS[x.status]||{}).label||x.status}</span></span><span>${x.sale_price?`<b>SOLD ${money(x.sale_price)}</b>${x.sale_price_per_unit?`<br><span class="mut" style="font-size:11.5px">${money(x.sale_price_per_unit)}/unit${x.sale_date?' · '+String(x.sale_date).slice(0,10):''}</span>`:''}`:`${money(x.asking_price)}${x.price_per_unit?`<br><span class="mut" style="font-size:11.5px">${money(x.price_per_unit)}/unit</span>`:''}`}</span></div>`).join(''):'<div class="mut">No comps found.</div>';
+  const allH=d.history||[];const h=allH.filter(x=>x.field==='asking_price'||x.field==='sale_price'||x.field==='status'||(x.field||'').startsWith('uw.'));
+  const histHtml=h.length?`<table class="htbl"><tr><th>Date</th><th>Field</th><th>Change</th></tr>${h.slice(0,20).map(x=>{let chg;if(x.field==='asking_price'){const o=+x.old_value,n=+x.new_value,cut=n<o;chg=`<span class="${cut?'cut':'rise'}">${cut?'▼':'▲'} ${money(o)} → ${money(n)}</span>`;}else if(x.field==='sale_price'){chg=`<b>SOLD ${money(+x.new_value)}</b>`;}else chg=`${x.old_value??'—'} → <b>${x.new_value??'—'}</b>`;return `<tr><td>${(x.changed_at||'').slice(0,10)}</td><td>${(x.field||'').replace('_',' ')}</td><td>${chg}</td></tr>`;}).join('')}</table>`:'<div class="mut">No changes recorded.</div>';
   const L=d.links||{};const link=(href,txt)=>href?`<a href="${href}" target="_blank">${txt}</a>`:`<span class="mut">${txt}: —</span>`;
   const linksHtml=[link(L.gmail_thread,'Gmail thread'),L.drive_folder_id?link('https://drive.google.com/drive/folders/'+L.drive_folder_id,'Drive folder'):link(null,'Drive'),link(L.om_url,'OM'),link(L.boe_url,'BOE')].join(' &nbsp;·&nbsp; ');
   document.getElementById('detail').innerHTML=`
     <div class="back" onclick="backTo()">← back</div>
     <div class="dhead"><h2><a href="${mapsUrl(dl)}" target="_blank">${dl.name||'—'}</a></h2>
       ${dl.tier?`<span class="badge ${dl.tier}">${dl.tier}</span>`:''}<span class="stat ${dl.status}">${(STATUS[dl.status]||{}).label||dl.status}</span></div>
-    <div class="dsub">${dl.market} ${dl.state} · ${dl.effective_units||'?'} units · ${money(dl.effective_ask)} · ${money(dl.price_per_unit)}/unit · last seen ${(dl.last_seen_at||'').slice(0,10)}</div>
+    <div class="dsub">${dl.market} ${dl.state} · ${dl.effective_units||'?'} units · ${money(dl.effective_ask)} · ${money(dl.price_per_unit)}/unit${dl.sale_price?` · <b>SOLD ${money(dl.sale_price)}</b>${dl.sale_price_per_unit?' ('+money(dl.sale_price_per_unit)+'/unit)':''}`:''} · last seen ${(dl.last_seen_at||'').slice(0,10)}</div>
     <div class="actions">
       <button onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'underwriting')">→ Underwriting</button>
       <button onclick="setStatus('${dl.deal_kind}',${dl.deal_id},'loi_sent')">→ LOI sent</button>

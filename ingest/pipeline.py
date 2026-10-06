@@ -28,7 +28,8 @@ _DEAL_KW = re.compile(
 # any one of these is strong enough on its own
 _STRONG = re.compile(
     r"\b(multi[- ]?family|cap rate|rent roll|offering memorandum|price per unit|"
-    r"\bt-?12\b|pro[- ]?forma)\b", re.I)
+    r"\bt-?12\b|pro[- ]?forma|just sold|just closed|closing announcement|"
+    r"successful(?:ly)? clos\w*|sold for|has sold|under agreement)\b", re.I)
 # never re-ingest the system's own briefing (it is full of addresses/prices)
 _BRIEFING = re.compile(r"RTP Deal Briefing", re.I)
 

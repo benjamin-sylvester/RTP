@@ -78,6 +78,16 @@ def gather(conn, since):
         "SELECT count(*) FROM listing_history WHERE changed_at > %s "
         "AND field NOT IN ('asking_price','status')", (since,)).fetchone()[0]
 
+    # executed sales since last briefing (closing announcements). Logged as a
+    # sale_price history event on insert/enrich, so this catches new AND known deals.
+    sold = conn.execute(
+        """SELECT l.id, l.address, l.city, l.state, l.units, l.sale_price,
+                  l.sale_price_per_unit, l.sale_date, l.asking_price, l.status, lf.cap_rate
+           FROM listing_history lh JOIN listings l ON l.id = lh.listing_id
+           LEFT JOIN listing_financials lf ON lf.listing_id = l.id
+           WHERE lh.field='sale_price' AND lh.changed_at > %s
+           ORDER BY lh.changed_at DESC""", (since,)).fetchall()
+
     needs_review = conn.execute(
         "SELECT address, city, state, units, asking_price, "
         "raw_data->'routing_reasons'->>0 FROM listings WHERE status='needs_review' "
@@ -90,7 +100,8 @@ def gather(conn, since):
     price_cuts = [c for c in changes if c[7] == "asking_price" and int(c[9]) < int(c[8])]
     return {"new_leads": new_leads, "gone_quiet": gone_quiet,
             "pipeline_changes": pipeline_changes, "market_changes": market_changes,
-            "price_cuts": price_cuts, "enrich_n": enrich_n, "needs_review": needs_review}
+            "price_cuts": price_cuts, "enrich_n": enrich_n, "needs_review": needs_review,
+            "sold": sold}
 
 
 def _maps_link(name, market, state):
@@ -128,10 +139,12 @@ def _lead_card(r):
 def render_html(data, since):
     nl, pc, nr = data["new_leads"], data["price_cuts"], data["needs_review"]
     pipe_ch, mkt_ch, quiet = data["pipeline_changes"], data["market_changes"], data["gone_quiet"]
+    sold = data.get("sold") or []
     header = (f"{len(nl)} new lead{'s'*(len(nl)!=1)} · {len(pc)} price cut{'s'*(len(pc)!=1)} "
-              f"· {len(nr)} needs review")
+              + (f"· {len(sold)} closed sale{'s'*(len(sold)!=1)} " if sold else "")
+              + f"· {len(nr)} needs review")
 
-    if not nl and not pipe_ch and not mkt_ch and not quiet and not nr:
+    if not nl and not pipe_ch and not mkt_ch and not quiet and not nr and not sold:
         return (f'<div style="font-family:system-ui,Arial">'
                 f'<h2>RTP Deal Briefing</h2><p>No new deals or changes today.</p></div>'), header
 
@@ -145,6 +158,27 @@ def render_html(data, since):
                      '<table style="width:100%;border-collapse:collapse;border:1px solid #eee">')
         parts.extend(_lead_card(r) for r in nl)
         parts.append('</table>')
+
+    if sold:
+        parts.append('<h3 style="font-size:14px;color:#444;margin:20px 0 6px">'
+                     'CLOSED SALES (COMPS)</h3><ul style="margin:0;padding-left:18px">')
+        for (_id, addr, city, st, units, sp, sppu, sdate, ask, status, cap) in sold:
+            extra = []
+            if sppu:
+                extra.append(f"{_usd(sppu)}/unit")
+            if cap:
+                extra.append(f"{float(cap) * 100:.1f}% cap")
+            if ask:
+                extra.append(f"ask {_usd(ask)}")
+            if sdate:
+                extra.append(f"closed {sdate}")
+            flag = ("" if status == "comp_only" else
+                    f' <b style="color:#c33">— in your pipeline ({status})</b>')
+            parts.append(f'<li style="font-size:13px;margin:3px 0"><b>SOLD {_usd(sp)}</b> · '
+                         f'{addr}, {city} {st} · {units or "?"} units '
+                         f'<span style="color:#777">· {" · ".join(extra)}</span> '
+                         f'<span style="color:#aaa">id {_id}</span>{flag}</li>')
+        parts.append('</ul>')
 
     def change_rows(rows):
         out = []

@@ -6,7 +6,7 @@ Railway auto-deploys on push to `master`.
 
 | Service | Start command | Schedule | What it does |
 |---|---|---|---|
-| `rtp-ingest` | `python scripts/run_ingest.py` | cron `*/15 * * * *` | every 15 min: pull Deal Flow, parse/dedup/route, **process reply-to-kill**, label processed |
+| `rtp-ingest` | `python scripts/run_ingest.py` | cron `*/15 * * * *` | every 15 min: scan BOTH inboxes (all mail, last 30 days), parse/dedup/route (incl. closing announcements -> sold comps), **process reply-to-kill**, record each message in `processed_messages` (no Gmail labels) |
 | `rtp-briefing` | `python scripts/daily_job.py` | cron `30 10 * * *` | daily: send the briefing to `DISPATCH_EMAIL` (no sweep — activeness is by last_seen_at) |
 | `rtp-dashboard` | `uvicorn api.main:app --host 0.0.0.0 --port $PORT` | **always-on web** | the private dashboard (table/detail/status actions); Railway gives it a public HTTPS URL |
 
@@ -64,7 +64,22 @@ Cron schedule + start command per service are still set in the dashboard (Settin
 - Reply-to-kill is handled by `rtp-ingest` (it reads briefing replies each cycle), so it only
   works once that service is live on Railway.
 
+## Inbox scan config (env vars on `rtp-ingest`)
+- `GMAIL_SCAN` (personal) / `GMAIL_SCAN_RTP` (work): Gmail search for what to scan. Unset ->
+  `GMAIL_SCAN_DEFAULT` -> `newer_than:30d -in:sent -in:draft -in:spam -in:trash` (all mail, not
+  just the inbox, because Superhuman auto-archives broker blasts). The literal value `label`
+  restores the old Deal Flow label mode.
+- Processed tracking = `processed_messages` table (migration 014). Ingestion never labels or
+  modifies Gmail. `run_ingest.py --baseline` marks the current window processed without parsing
+  (use when enabling an inbox whose backlog you don't want). `scripts/reingest_message.py` re-reads
+  specific message ids after a parser change.
+- 2026-10-06: both cron schedules had silently disappeared on 9/9 (services ran once at deploy and
+  exited). Check `railway status --json` -> `cronSchedule` per service when nothing is ingesting;
+  restore with `railway api 'mutation { serviceInstanceUpdate(serviceId:"...", environmentId:"...",
+  input:{cronSchedule:"*/15 * * * *"}) }'`.
+
 ## Notes
-- One-time DB migrations (`db/migrations/00*.sql`) and the `last_seen_at` backfill were already
+- One-time DB migrations (`db/migrations/0NN_*.sql`) and the `last_seen_at` backfill were already
   applied to the live DB from here; the cron services only run the app, not migrations.
+  Apply a new one with `python scripts/apply_migration.py 0NN` (all migrations are idempotent).
 - Secrets live only in Railway variables + local `.env` (gitignored) — never in the repo.

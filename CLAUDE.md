@@ -43,6 +43,16 @@ database via a Postgres MCP. Documents live in Google Drive and are linked from 
   Quarantine them (a `needs_review` status / flag) for manual resolution instead of inserting.
 - **Routing:** buy box fit or borderline -> status `lead`. Otherwise status `comp_only`.
   One table, never a second database.
+- **Executed sales (closing announcements):** the parser returns `listing_status='sold'` plus
+  `sale_price` / `sale_date` / `cap_rate`. A sold deal is ALWAYS `comp_only` (never a lead) and
+  stores the executed price in `listings.sale_price` (+ `sale_price_per_unit`, `sale_date`,
+  migration 013) beside the ask. On a match, a `lead` flips to `comp_only`; manual/sticky statuses
+  are left alone and the briefing flags "in your pipeline". Never write a sale price into
+  `asking_price`. Every sale logs a `sale_price` row in `listing_history` (the briefing's
+  CLOSED SALES section reads from there).
+- **Gmail is read-only for ingestion.** Processed messages are tracked in `processed_messages`
+  (migration 014), never by labeling mail. Both inboxes are scanned wholesale (all mail, last 30
+  days) with the `looks_like_deal` gate deciding what reaches the Claude parser.
 - **Packages:** multi-parcel deals group under the `packages` table (migration 001) with
   member listings via `listings.package_id`. Evaluate buy box on `v_deals.effective_units`
   (combined unit count), NOT per parcel. Unit floor is 4, max 34 (see buy_box.yaml).

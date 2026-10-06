@@ -19,7 +19,10 @@ LISTING_FIELDS = (
     "address, city, state, zip, units, asking_price, year_built, building_sf, "
     "lot_sf, unit_mix (array of {type, count, avg_rent}), gross_revenue, "
     "total_expenses, noi, vacancy_rate, broker_name, broker_email, listing_date "
-    "(YYYY-MM-DD), external_id (MLS number if present)"
+    "(YYYY-MM-DD), external_id (MLS number if present), listing_status "
+    "(\"for_sale\" | \"under_agreement\" | \"sold\"), sale_price, sale_date (YYYY-MM-DD), "
+    "cap_rate (decimal, e.g. 0.08), other_addresses (array of extra street addresses "
+    "when several buildings trade as one deal)"
 )
 
 SYSTEM = (
@@ -37,6 +40,14 @@ Rules:
 - If the email contains NO actual property listing (event/meetup invite, newsletter
   chatter, pure notification with no deal), return {{"listings": []}}.
 - Set any unavailable field to null. Money as plain integers in DOLLARS (no symbols/commas).
+- listing_status: "sold" for closing / "just sold" / "just closed" announcements,
+  "under_agreement" for under-agreement / pending notices, otherwise "for_sale".
+  For a sold deal put the CLOSED price in sale_price (and the closing date in sale_date
+  if stated); set asking_price ONLY if the original list price is also stated. Never put
+  a sale price in asking_price.
+- Several buildings sold or listed together as ONE deal with ONE price -> ONE element:
+  the first street address in address, the other street addresses in other_addresses,
+  the combined unit count in units.
 - If this is a FORWARDED email, extract the deal from the forwarded content and set
   broker_name/broker_email from the ORIGINAL sender if visible.
 
