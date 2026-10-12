@@ -76,9 +76,22 @@ def _strip_quote(text):
     return (text[:m.start()] if m else (text or "")).strip()
 
 
-def bens_sent_text(svc, thread_id, max_chars=4000):
+def _recipients(msg):
+    """Lower-cased addresses in To/Cc of one message."""
+    import re
+    out = set()
+    for h in msg.get("payload", {}).get("headers", []):
+        if h.get("name", "").lower() in ("to", "cc"):
+            out.update(a.lower() for a in re.findall(r"[\w.+-]+@[\w-]+\.[\w.-]+", h.get("value", "")))
+    return out
+
+
+def bens_sent_text(svc, thread_id, max_chars=4000, broker_email=None):
     """Concatenated bodies of the messages BEN SENT in this thread (SENT label), quotes
-    stripped so the classifier sees his words, not the broker's."""
+    stripped so the classifier sees his words, not the broker's.
+    Ben's rule (10/12/26): only messages addressed to the listing's broker count. A forward to
+    Justin or anyone else is not engagement with the deal. If broker_email is given, sent
+    messages whose To/Cc do not include it are ignored; if none remain, returns ''."""
     try:
         th = svc.users().threads().get(userId="me", id=thread_id, format="full").execute()
     except Exception:
@@ -86,6 +99,8 @@ def bens_sent_text(svc, thread_id, max_chars=4000):
     parts = []
     for msg in th.get("messages", []):
         if "SENT" not in msg.get("labelIds", []):
+            continue
+        if broker_email and broker_email.lower() not in _recipients(msg):
             continue
         leaves = []
         gc._walk_parts(msg.get("payload", {}), leaves)
@@ -143,9 +158,9 @@ def run(conn, svc, after=AFTER_FLOOR, log=print):
     if not threads:
         return s
     rows = conn.execute(
-        "SELECT id, address, status, raw_email_id FROM listings "
+        "SELECT id, address, status, raw_email_id, broker_email FROM listings "
         "WHERE raw_email_id = ANY(%s) AND package_id IS NULL", (list(threads),)).fetchall()
-    for lid, addr, status, thread in rows:
+    for lid, addr, status, thread, broker_email in rows:
         s["checked"] += 1
         if status in TERMINAL:
             if _flag_once(conn, lid, status, log):
@@ -153,7 +168,9 @@ def run(conn, svc, after=AFTER_FLOOR, log=print):
             continue
         if RANK.get(status, 0) >= TOP_TARGET:
             continue  # already at the top stage engagement can set; nothing to do, no AI call
-        stage = infer_stage(bens_sent_text(svc, thread))
+        if not broker_email:
+            continue  # no known counterparty: a reply cannot be attributed to the deal (Ben, 10/12)
+        stage = infer_stage(bens_sent_text(svc, thread, broker_email=broker_email))
         if not stage or RANK[stage] <= RANK.get(status, 0):
             continue  # no read, or would not move the deal forward
         freshness.set_status(conn, "listing", lid, stage,

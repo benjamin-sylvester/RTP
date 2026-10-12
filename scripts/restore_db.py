@@ -17,10 +17,19 @@ ORDER = ["broker_format_config", "packages", "system_meta", "listings", "listing
 
 def main(backup_dir, url):
     b = pathlib.Path(backup_dir)
+    wipe = "--wipe" in sys.argv
     with psycopg.connect(url, autocommit=True) as conn:
         exists = conn.execute("SELECT to_regclass('public.listings')").fetchone()[0]
-        if exists:
-            sys.exit("target already has a listings table; refusing to restore over it")
+        if exists and wipe:
+            import os
+            from _conn import load_env
+            load_env()
+            if url == os.environ.get("DATABASE_URL"):
+                sys.exit("--wipe refused: target is the production DATABASE_URL")
+            conn.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+            print("wiped target schema (sandbox)")
+        elif exists:
+            sys.exit("target already has a listings table; refusing to restore over it (use --wipe for the sandbox)")
         print("schema.sql"); conn.execute(b.joinpath("schema.sql").read_text(encoding="utf8"))
         for m in sorted(b.joinpath("migrations").glob("*.sql")):
             print("migration", m.name)
@@ -32,8 +41,10 @@ def main(backup_dir, url):
             f = b / f"{t}.csv"
             if not f.exists():
                 print("no csv for", t); continue
+            header = f.open("r", encoding="utf8").readline().strip()
+            cols = ", ".join(c.strip() for c in header.split(","))
             with conn.cursor() as cur, f.open("rb") as fh, cur.copy(
-                    f"COPY {t} FROM STDIN WITH (FORMAT csv, HEADER true)") as cp:
+                    f"COPY {t} ({cols}) FROM STDIN WITH (FORMAT csv, HEADER true)") as cp:
                 while chunk := fh.read(1 << 16):
                     cp.write(chunk)
             n = conn.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
@@ -48,6 +59,6 @@ def main(backup_dir, url):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
+    if len(sys.argv) < 3:
         sys.exit(__doc__)
     main(sys.argv[1], sys.argv[2])

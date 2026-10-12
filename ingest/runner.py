@@ -69,6 +69,13 @@ def run_once(commit=True, after=AFTER_FLOOR, log=print):
     log(f"[ingest] {len(accts)} inbox(es): " +
         ", ".join(f"{a['key']}({a['email'] or '?'})" for a in accts))
     conn = _connect()
+    run_id = None
+    if commit:
+        try:
+            run_id = conn.execute("INSERT INTO job_runs (job) VALUES ('ingest') RETURNING id").fetchone()[0]
+            conn.commit()
+        except Exception as e:  # job_runs arrives with migration 018; never block ingest on it
+            conn.rollback(); log(f"[ingest] job_runs unavailable: {e}")
     try:
         for acct in accts:
             svc = gc.service(acct["refresh_token"])
@@ -132,6 +139,14 @@ def run_once(commit=True, after=AFTER_FLOOR, log=print):
                         except Exception:
                             conn.rollback()
         log(f"[ingest] done: {s}")
+        if run_id:
+            try:
+                import json
+                conn.execute("UPDATE job_runs SET finished_at=now(), status=%s, counts=%s::jsonb WHERE id=%s",
+                             ("warn" if s["errors"] else "ok", json.dumps(s), run_id))
+                conn.commit()
+            except Exception as e:
+                conn.rollback(); log(f"[ingest] job_runs update failed: {e}")
         return s
     finally:
         conn.close()

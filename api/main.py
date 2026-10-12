@@ -191,7 +191,93 @@ def deal_detail(kind: str, deal_id: int, _auth=Depends(require_auth)):
         detail["members"] = db.query(
             "SELECT id, address, city, units, asking_price, status, last_seen_at "
             "FROM listings WHERE package_id=%s ORDER BY address", (deal_id,))
+    # Phase 1: offers, broker interactions, documents, property history (all optional tables)
+    try:
+        detail["offers"] = db.query(
+            "SELECT o.id, o.offer_type, o.direction, o.offer_date, o.price_cents, o.terms, o.response, "
+            "o.response_date, o.response_notes, o.notes, p.full_name AS sent_to "
+            f"FROM offers o LEFT JOIN people p ON p.id=o.sent_to_person_id WHERE o.{key}=%s "
+            "ORDER BY o.offer_date DESC, o.id DESC", (deal_id,))
+        detail["interactions"] = db.query(
+            "SELECT i.occurred_at, i.channel, i.direction, i.summary, p.full_name AS person "
+            f"FROM interactions i LEFT JOIN people p ON p.id=i.person_id WHERE i.{key}=%s "
+            "ORDER BY i.occurred_at DESC LIMIT 20", (deal_id,))
+        detail["documents"] = db.query(
+            "SELECT id, title, doc_type, doc_date, version, drive_url, drive_file_id "
+            f"FROM documents WHERE {key}=%s ORDER BY doc_date DESC NULLS LAST, id DESC", (deal_id,))
+        if kind == "listing":
+            detail["broker"] = db.one(
+                "SELECT p.id, p.full_name, p.phone, o.name AS firm, "
+                "(SELECT max(occurred_at) FROM interactions i WHERE i.person_id=p.id) AS last_interaction, "
+                "(SELECT summary FROM interactions i WHERE i.person_id=p.id ORDER BY occurred_at DESC LIMIT 1) AS last_summary "
+                "FROM listings l JOIN people p ON p.id=l.broker_person_id LEFT JOIN organizations o ON o.id=p.org_id "
+                "WHERE l.id=%s", (deal_id,))
+            detail["property_history"] = db.query(
+                "SELECT event_kind, event_at, ref_id, detail_status, amount_cents, detail "
+                "FROM v_property_history WHERE property_id=(SELECT property_id FROM listings WHERE id=%s) "
+                "ORDER BY event_at", (deal_id,))
+    except Exception as e:  # pre-migration database: keep the page working
+        detail["phase1_error"] = str(e)[:200]
     return detail
+
+
+@app.get("/api/investors")
+def investors(tier: str | None = None, stale_days: int | None = None, _auth=Depends(require_auth)):
+    """LP pipeline (people with lp / lp_prospect / capital_partner roles) with last touch,
+    next action and positions. Feeds the Investors tab."""
+    where, params = [], []
+    if tier:
+        where.append("lp_tier = %s"); params.append(tier)
+    if stale_days:
+        where.append("(last_interaction IS NULL OR last_interaction < now() - make_interval(days => %s))"); params.append(stale_days)
+    sql = "SELECT * FROM v_lp_pipeline" + (" WHERE " + " AND ".join(where) if where else "") + \
+          " ORDER BY lp_tier NULLS LAST, last_interaction DESC NULLS LAST, full_name"
+    rows = db.query(sql, params)
+    positions = db.query("SELECT * FROM v_investor_positions")
+    entities = db.query("SELECT id, legal_name, short_name, kind, state_of_formation, property_id FROM entities ORDER BY id")
+    return {"count": len(rows), "people": rows, "positions": positions, "entities": entities}
+
+
+@app.get("/api/inbox")
+def inbox(_auth=Depends(require_auth)):
+    """Everything waiting for a human: review queue, jobs that did not run, offers past their
+    acceptance date, action items due soon, needs_review listings."""
+    return {
+        "jobs_missing": db.query("SELECT job, expected_every::text, last_ok, last_status FROM v_jobs_missing"),
+        "job_runs": db.query("SELECT job, started_at, finished_at, status, counts FROM job_runs ORDER BY started_at DESC LIMIT 20"),
+        "review": db.query("SELECT id, kind, ref_table, ref_id, payload, created_at FROM review_queue WHERE status='open' ORDER BY created_at DESC"),
+        "needs_review": db.query("SELECT id, address, city, state, units, asking_price, source, date_ingested "
+                                 "FROM listings WHERE status='needs_review' ORDER BY date_ingested DESC"),
+        "offers_overdue": db.query(
+            "SELECT o.id, COALESCE(l.address, pk.name) AS name, o.listing_id, o.package_id, o.offer_type, o.offer_date, o.price_cents, "
+            "o.terms->>'acceptance_date' AS acceptance_date FROM offers o LEFT JOIN listings l ON l.id=o.listing_id "
+            "LEFT JOIN packages pk ON pk.id=o.package_id WHERE o.response='pending' ORDER BY o.offer_date"),
+        "actions_due": db.query("SELECT * FROM v_action_items_open WHERE due_on <= CURRENT_DATE + 7 ORDER BY due_on"),
+    }
+
+
+@app.post("/api/inbox/review/{item_id}")
+def resolve_review(item_id: int, payload: dict = Body(...), _auth=Depends(require_auth)):
+    status = (payload or {}).get("status", "resolved")
+    if status not in ("resolved", "dismissed"):
+        raise HTTPException(400, "status must be resolved or dismissed")
+    with db.connect() as conn:
+        conn.execute("UPDATE review_queue SET status=%s, resolved_at=now(), resolution=%s WHERE id=%s",
+                     (status, (payload or {}).get("resolution"), item_id))
+        conn.commit()
+    return {"ok": True, "id": item_id, "status": status}
+
+
+@app.post("/api/actions/{item_id}")
+def set_action(item_id: int, payload: dict = Body(...), _auth=Depends(require_auth)):
+    status = (payload or {}).get("status")
+    if status not in ("open", "waiting", "done", "dropped"):
+        raise HTTPException(400, "bad status")
+    with db.connect() as conn:
+        conn.execute("UPDATE action_items SET status=%s, completed_at=CASE WHEN %s='done' THEN now() ELSE completed_at END WHERE id=%s",
+                     (status, status, item_id))
+        conn.commit()
+    return {"ok": True, "id": item_id, "status": status}
 
 
 @app.get("/api/deals/{kind}/{deal_id}/comps")

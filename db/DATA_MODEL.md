@@ -1,5 +1,5 @@
 # RTP database: data model
-Target schema for the RTP operating system. v01, 10/12/26. Companion to `context/build-plan.md` (why and when) and `context/ai-sandbox-plan.md` (dashboard and skills). Live DDL is `db/schema.sql` plus `db/migrations/NNN_*.sql`; this file is the human-readable contract and must be updated in the same commit as any migration.
+Target schema for the RTP operating system. v02, 10/12/26 (Blocks 1, 2, 5 part 1 and 6 are live in production as of migration 020). Companion to `context/build-plan.md` (why and when) and `context/ai-sandbox-plan.md` (dashboard and skills). Live DDL is `db/schema.sql` plus `db/migrations/NNN_*.sql`; this file is the human-readable contract and must be updated in the same commit as any migration.
 
 Legend: **[live]** exists in production today. **[P1]** to **[P4]** added in that build phase. Column lists show name: type, then notes. PK = primary key, FK = foreign key, NN = not null, UQ = unique.
 
@@ -133,7 +133,7 @@ Every touch between RTP and a person, optionally about a deal or asset. Replaces
 | direction | text NN CHECK (inbound, outbound, mutual) | |
 | occurred_at | timestamptz NN | |
 | summary | text NN | one to three sentences |
-| by_whom | text CHECK (ben, justin, claude) | who logged or who spoke |
+| by_person_id | FK people | internal person who spoke or logged (decision 2) |
 | source, source_id | text | gmail thread id, wispr meeting id, "ben debrief 10/12" |
 | created_at | timestamptz | |
 UQ (source, source_id, person_id). Index (person_id, occurred_at desc).
@@ -145,7 +145,7 @@ Replaces the tracker's Next actions tab and feeds every "to do" view.
 | id | serial PK | |
 | title | text NN | |
 | details | text | |
-| owner | text NN CHECK (ben, justin, claude, other) | |
+| owner_person_id | FK people | internal person who owns it (decision 2) |
 | due_on | date | |
 | status | text NN CHECK (open, waiting, done, dropped) | |
 | person_id, org_id, listing_id, package_id, property_id, entity_id | FKs | what it is about |
@@ -495,6 +495,9 @@ UQ (entity_id, person_id, investor_org_id, share_class).
 ---
 
 ## Block 6: operations [P1]
+
+### job_schedule [P1]
+`job text PK, expected_every interval, grace interval, enabled bool, notes`. Seeded: ingest 15 min, daily_job 1 day, uw_sync 1 day, backup 7 days, tracker_export 1 day. `v_jobs_missing` compares the last ok run to expected_every + grace.
 
 ### job_runs
 | column | type | notes |

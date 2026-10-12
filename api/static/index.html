@@ -178,6 +178,8 @@ tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
     <button class="tab" role="tab" data-panel="deals" aria-selected="false">Deals</button>
     <button class="tab" role="tab" data-panel="map" aria-selected="false">Map</button>
     <button class="tab" role="tab" data-panel="stats" aria-selected="false">Analytics</button>
+    <button class="tab" role="tab" data-panel="investors" aria-selected="false">Investors</button>
+    <button class="tab" role="tab" data-panel="inbox" aria-selected="false">Inbox</button>
   </nav>
   <button class="iconbtn" id="theme" title="Toggle theme">◐</button>
   <button class="iconbtn" onclick="logout()">Log out</button>
@@ -229,6 +231,23 @@ tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
     </div>
   </section>
 
+  <!-- INVESTORS -->
+  <section class="panel" id="investors">
+    <div class="section-head"><div><div class="eyebrow">LPs · prospects · capital partners · positions</div><h2>Investors</h2></div><div class="note" id="inv-note"></div></div>
+    <div class="filters">
+      <label>Tier<select id="inv-tier"><option value="">any</option><option>A</option><option>B</option><option>C</option><option>D</option></select></label>
+      <label>Not touched in<select id="inv-stale"><option value="">any</option><option value="30">30 days</option><option value="60">60 days</option><option value="90">90 days</option></select></label>
+    </div>
+    <div class="tablecard"><div class="tscroll"><table><thead><tr><th>Tier</th><th>Name</th><th>Firm</th><th>Roles</th><th>Email</th><th>Last touch</th><th>Last note</th><th>Next action</th><th>Due</th><th>Invested</th></tr></thead><tbody id="inv-body"></tbody></table></div></div>
+    <div class="section-head" style="margin-top:26px"><div><div class="eyebrow">Positions by entity</div><h3>Investor positions</h3></div></div>
+    <div class="tablecard"><div class="tscroll"><table><thead><tr><th>Entity</th><th>Investor</th><th>Funded</th><th>Ownership</th><th>GP</th></tr></thead><tbody id="pos-body"></tbody></table></div></div>
+  </section>
+  <!-- INBOX -->
+  <section class="panel" id="inbox">
+    <div class="section-head"><div><div class="eyebrow">Everything waiting for a human</div><h2>Inbox</h2></div><div class="note" id="inbox-note"></div></div>
+    <div id="inbox-body"></div>
+  </section>
+
   <section class="panel" id="detailpanel"><div id="detail"></div></section>
 </main>
 
@@ -256,7 +275,7 @@ function show(id,fromTab){
   panels.forEach(p=>p.classList.toggle('on',p.id===id));
   if(fromTab!==false) tabs.forEach(t=>t.setAttribute('aria-selected',t.dataset.panel===id));
   try{if(id!=='detailpanel')localStorage.setItem('rtp_tab',id)}catch(e){}
-  if(id==='live')loadLive(); if(id==='deals')loadDeals(); if(id==='map')loadMap(); if(id==='stats')loadStats();
+  if(id==='live')loadLive(); if(id==='deals')loadDeals(); if(id==='map')loadMap(); if(id==='stats')loadStats(); if(id==='investors')loadInvestors(); if(id==='inbox')loadInbox();
 }
 tabs.forEach(t=>t.onclick=()=>show(t.dataset.panel));
 
@@ -496,6 +515,10 @@ function renderDetail(d,c){
   const allH=d.history||[];const h=allH.filter(x=>x.field==='asking_price'||x.field==='sale_price'||x.field==='status'||(x.field||'').startsWith('uw.'));
   const histHtml=h.length?`<table class="htbl"><tr><th>Date</th><th>Field</th><th>Change</th></tr>${h.slice(0,20).map(x=>{let chg;if(x.field==='asking_price'){const o=+x.old_value,n=+x.new_value,cut=n<o;chg=`<span class="${cut?'cut':'rise'}">${cut?'▼':'▲'} ${money(o)} → ${money(n)}</span>`;}else if(x.field==='sale_price'){chg=`<b>SOLD ${money(+x.new_value)}</b>`;}else chg=`${x.old_value??'—'} → <b>${x.new_value??'—'}</b>`;return `<tr><td>${(x.changed_at||'').slice(0,10)}</td><td>${(x.field||'').replace('_',' ')}</td><td>${chg}</td></tr>`;}).join('')}</table>`:'<div class="mut">No changes recorded.</div>';
   const L=d.links||{};const link=(href,txt)=>href?`<a href="${href}" target="_blank">${txt}</a>`:`<span class="mut">${txt}: —</span>`;
+  const offers=d.offers||[];const offersHtml=offers.length?`<table class="htbl"><tr><th>Date</th><th>Type</th><th>Price</th><th>To</th><th>Response</th><th>Notes</th></tr>${offers.map(o=>`<tr><td class="mono">${dt(o.offer_date)}</td><td>${esc(o.offer_type)} ${o.direction==='received'?'(received)':''}</td><td class="num">${money(o.price_cents)}</td><td>${esc(o.sent_to||'')}</td><td><b>${esc(o.response)}</b>${o.response_date?' '+dt(o.response_date):''}</td><td class="mut">${esc((o.notes||'').slice(0,140))}</td></tr>`).join('')}</table>`:'<div class="mut">No offers logged. Log one with scripts/log_offer.py.</div>';
+  const b=d.broker;const brokerHtml=b?`<div class="kv"><span class="k">Name</span><span class="v">${esc(b.full_name)}</span></div><div class="kv"><span class="k">Firm</span><span class="v">${esc(b.firm||'—')}</span></div><div class="kv"><span class="k">Phone</span><span class="v mono">${esc(b.phone||'—')}</span></div><div class="kv"><span class="k">Last touch</span><span class="v">${dt(b.last_interaction)}</span></div>${b.last_summary?`<div class="mut">${esc(b.last_summary.slice(0,200))}</div>`:''}`:`<div class="mut">${esc(dl.broker_name||'No broker linked')}</div>`;
+  const ints=d.interactions||[];const intHtml=ints.length?ints.map(i=>`<div class="kv"><span class="k mono">${dt(i.occurred_at)}</span><span class="v">${esc(i.channel)} · ${esc(i.person||'')} · ${esc(i.summary.slice(0,160))}</span></div>`).join(''):'<div class="mut">None logged for this deal.</div>';
+  const docs=d.documents||[];const docsHtml=docs.length?docs.map(x=>`<div class="kv"><span class="k">${esc(x.doc_type)}</span><span class="v">${x.drive_file_id?`<a href="https://drive.google.com/file/d/${x.drive_file_id}/view" target="_blank">${esc(x.title)}</a>`:esc(x.title)} ${x.doc_date?'· '+dt(x.doc_date):''}</span></div>`).join(''):'<div class="mut">No documents linked.</div>';
   const linksHtml=[link(L.gmail_thread,'Gmail thread'),L.drive_folder_id?link('https://drive.google.com/drive/folders/'+L.drive_folder_id,'Drive folder'):link(null,'Drive'),link(L.om_url,'OM'),link(L.boe_url,'BOE')].join(' &nbsp;·&nbsp; ');
   document.getElementById('detail').innerHTML=`
     <div class="back" onclick="backTo()">← back</div>
@@ -518,8 +541,43 @@ function renderDetail(d,c){
       <div class="card"><h3>Unit mix</h3>${umHtml}</div>
       <div class="card wide"><h3>Price &amp; status history</h3>${histHtml}</div>
       <div class="card wide"><h3>Comps — ${c.basis||''}</h3>${compHtml}</div>
+      <div class="card wide"><h3>Offers</h3>${offersHtml}</div>
+      <div class="card"><h3>Broker</h3>${brokerHtml}</div>
+      <div class="card"><h3>Recent interactions</h3>${intHtml}</div>
+      <div class="card wide"><h3>Documents</h3>${docsHtml}</div>
       <div class="card wide"><h3>Links</h3>${linksHtml}</div></div>`;
 }
+
+/* investors */
+const esc=x=>String(x??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function loadInvestors(){
+  const tier=document.getElementById('inv-tier').value,stale=document.getElementById('inv-stale').value;
+  const qs=new URLSearchParams();if(tier)qs.set('tier',tier);if(stale)qs.set('stale_days',stale);
+  try{const d=await(await api('/api/investors?'+qs)).json();
+    document.getElementById('inv-note').textContent=`${d.count} people`;
+    document.getElementById('inv-body').innerHTML=d.people.map(p=>`<tr><td>${esc(p.lp_tier||'')}</td><td><b>${esc(p.full_name)}</b></td><td>${esc(p.organization||'')}</td><td class="mut">${(p.roles||[]).filter(r=>r!=='internal').join(', ')}</td><td class="mono">${esc(p.email||'')}</td><td class="mono">${dt(p.last_interaction)}</td><td class="mut" title="${esc(p.last_summary||'')}">${esc((p.last_summary||'').slice(0,90))}</td><td>${esc(p.next_action||'')}</td><td class="mono">${dt(p.next_action_due)}</td><td class="num">${p.funded_cents?money(p.funded_cents):''}</td></tr>`).join('')||'<tr><td colspan="10" class="mut">Nothing matches.</td></tr>';
+    document.getElementById('pos-body').innerHTML=d.positions.map(x=>`<tr><td>${esc(x.entity)}</td><td>${esc(x.investor||x.investor_entity||'')}</td><td class="num">${x.funded_cents!=null?money(x.funded_cents):'—'}</td><td class="num">${x.ownership_pct!=null?pct(x.ownership_pct):'—'}</td><td>${x.is_gp?'GP':''}</td></tr>`).join('');
+  }catch(e){}
+}
+['inv-tier','inv-stale'].forEach(id=>document.getElementById(id).addEventListener('change',loadInvestors));
+
+/* inbox */
+async function loadInbox(){
+  try{const d=await(await api('/api/inbox')).json();
+    const sec=(title,rows,render,empty)=>`<div class="card wide" style="margin-bottom:14px"><h3>${title}${rows.length?` <span class="mut">(${rows.length})</span>`:''}</h3>${rows.length?rows.map(render).join(''):`<div class="mut">${empty}</div>`}</div>`;
+    const total=d.jobs_missing.length+d.review.length+d.needs_review.length+d.offers_overdue.length+d.actions_due.length;
+    document.getElementById('inbox-note').textContent=total?`${total} items`:'Nothing waiting';
+    document.getElementById('inbox-body').innerHTML=
+      sec('Jobs that did not run',d.jobs_missing,j=>`<div class="kv"><span class="k">${esc(j.job)}</span><span class="v">every ${esc(j.expected_every)} · last ok ${j.last_ok?esc(j.last_ok.slice(0,16).replace('T',' ')):'never'} · last ${esc(j.last_status||'—')}</span></div>`,'All scheduled jobs ran on time.')+
+      sec('Offers awaiting a response',d.offers_overdue,o=>`<div class="kv"><span class="k">#${o.id} ${esc(o.name)}</span><span class="v">${esc(o.offer_type)} ${dt(o.offer_date)} ${money(o.price_cents)}${o.acceptance_date?' · accept by '+esc(o.acceptance_date):''} <a href="#" onclick="openDeal('${o.listing_id?'listing':'package'}',${o.listing_id||o.package_id});return false">open</a></span></div>`,'No pending offers.')+
+      sec('Action items due in 7 days',d.actions_due,a=>`<div class="kv"><span class="k mono">${dt(a.due_on)}</span><span class="v">${esc(a.title)}${a.about_person?' · '+esc(a.about_person):''}${a.about_org?' · '+esc(a.about_org):''} <button class="ok" onclick="setAction(${a.id},'done')">done</button> <button onclick="setAction(${a.id},'waiting')">waiting</button></span></div>`,'Nothing due this week.')+
+      sec('Review queue',d.review,r=>`<div class="kv"><span class="k">${esc(r.kind.replace(/_/g,' '))}</span><span class="v mono">${esc(JSON.stringify(r.payload||{}).slice(0,160))} <button class="ok" onclick="resolveReview(${r.id},'resolved')">resolved</button> <button onclick="resolveReview(${r.id},'dismissed')">dismiss</button></span></div>`,'Queue is empty.')+
+      sec('Listings at needs review',d.needs_review,l=>`<div class="kv"><span class="k"><a href="#" onclick="openDeal('listing',${l.id});return false">#${l.id} ${esc(l.address)}, ${esc(l.city)} ${esc(l.state)}</a></span><span class="v">${l.units||'?'}u · ${money(l.asking_price)} · ${esc(l.source||'')} · ${dt(l.date_ingested)}</span></div>`,'None.')+
+      sec('Recent job runs',d.job_runs,j=>`<div class="kv"><span class="k">${esc(j.job)}</span><span class="v mono">${esc(j.started_at.slice(0,16).replace('T',' '))} · ${esc(j.status)} · ${esc(JSON.stringify(j.counts||{}).slice(0,120))}</span></div>`,'No runs recorded yet.');
+  }catch(e){}
+}
+async function setAction(id,status){try{await api(`/api/actions/${id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});toast(`action ${status}`);loadInbox();}catch(e){}}
+async function resolveReview(id,status){try{await api(`/api/inbox/review/${id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});toast(status);loadInbox();}catch(e){}}
 
 /* toast + boot */
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.opacity=1;clearTimeout(t._h);t._h=setTimeout(()=>t.style.opacity=0,1800);}
