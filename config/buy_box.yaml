@@ -1,15 +1,15 @@
 # RTP Buy Box: single source of truth.
 # Read by BOTH the app (underwriting filter) and Cowork (deal triage).
-# CONFIRMED by Ben 2026-06-22: Southern NH. 2026-06-29: added the MA SouthCoast corridor
-# (Fall River + New Bedford). NH is the home turf (in-state deals are leads even outside a
-# named corridor); MA is in-box ONLY for the SouthCoast corridor cities. Floor = 4 units.
+# CONFIRMED by Ben 2026-10-12: 2 to 50 units in the NH corridors are leads. MA deals are
+# tracked as comps only (they inform the two owned MA assets) and never route to lead.
+# History: 2026-06-22 Southern NH, floor 4; 2026-06-29 MA SouthCoast corridor added (removed 10/12).
 
-version: 2026-06-29
+version: 2026-10-12
 status: confirmed
 
 units:
-  min: 4                       # lowered from 5 (Ben, Jun 22) for strong Strafford deals
-  max: 34
+  min: 2                       # Ben 10/12/26: Baxter-style 2-unit assets count
+  max: 50                      # Ben 10/12/26: 2 to 50 units
   preference: ">=15"
   # Count units at the PORTFOLIO/PACKAGE level, not per building. A multi-parcel
   # package (e.g. 3x 3-unit = 9 units) is evaluated on its combined unit count.
@@ -19,24 +19,24 @@ property_class: [B, C]
 
 price:
   min_usd: 500000
-  max_usd: 5000000
+  max_usd: 10000000           # Ben 10/12/26: packages like Seacoast 8 ($8.75M) are in box
 
 year_built:
-  min: 1940            # avoid pre-war structural risk
+  min: 1900            # Ben's skills say post-1900; most NH corridor stock is 1900-1930
 
 strategy:
   - value_add          # below-market rents, reno upside, deferred maintenance
   - on_market
   - off_market
 
-# Multi-state. `states` = where we'll consider a deal at all. `primary_state` is the home
-# turf: a primary-state deal that fits size+price is a (borderline) lead even outside a named
-# corridor. NON-primary states (MA) are in-box ONLY via a named corridor below — so all-of-MA
-# does NOT become leads, just the SouthCoast cities. Routing matches corridors on city+state.
+# Multi-state. `states` = where we'll consider a deal at all (MA stays so MA deals are
+# captured as comps). `primary_state` is the home turf: a primary-state deal that fits
+# size+price is a (borderline) lead even outside a named corridor. NON-primary states are
+# in-box ONLY via a named corridor below; with no MA corridor listed, MA is always comp_only.
 geography:
   states: [NH, MA]
   primary_state: NH
-  region: "Southern NH + MA SouthCoast"
+  region: "Southern NH"
   corridors:
     - name: "I-93 / Merrimack Valley"
       state: NH
@@ -44,9 +44,6 @@ geography:
     - name: "Strafford County"
       state: NH
       markets: [Dover, Rochester, Somersworth, Farmington, Milton]
-    - name: "MA SouthCoast"
-      state: MA
-      markets: [Fall River, New Bedford]
 
 # Scoring weights for the composite 0-100 score (auto_underwriting.score). Sum = 1.00.
 scoring_weights:
