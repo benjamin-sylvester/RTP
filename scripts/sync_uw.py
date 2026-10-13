@@ -34,8 +34,11 @@ DRY = "--dry" in sys.argv
 AU_MAP = {"in_place_cap": "implied_cap_current", "stabilized_cap": "implied_cap_stabilized"}
 
 
-def sync_one(conn, lid, address, ref, log, mode="local", svc=None, dry=False):
-    """ref is a local folder name (mode='local') or a Drive folder id (mode='drive')."""
+def sync_one(conn, lid, address, ref, log, mode="local", svc=None, dry=False, kind="listing"):
+    """ref is a local folder name (mode='local') or a Drive folder id (mode='drive').
+    kind is 'listing' or 'package' (packages: auto_underwriting keyed by package_id; no
+    listing_financials / unit_mix / listing_history side effects)."""
+    key = "package_id" if kind == "package" else "listing_id"
     if mode == "drive":
         from ingest import drive_client
         latest = drive_client.latest_model(svc, ref)
@@ -66,7 +69,7 @@ def sync_one(conn, lid, address, ref, log, mode="local", svc=None, dry=False):
 
     # prior synced values, to log only what actually moved
     prior_row = conn.execute(
-        "SELECT model_stats FROM auto_underwriting WHERE listing_id=%s", (lid,)).fetchone()
+        f"SELECT model_stats FROM auto_underwriting WHERE {key}=%s", (lid,)).fetchone()
     prior = (prior_row[0] or {}).get("canonical", {}) if prior_row and prior_row[0] else {}
 
     um = res.get("unit_mix") or []
@@ -96,14 +99,14 @@ def sync_one(conn, lid, address, ref, log, mode="local", svc=None, dry=False):
     vals = [filename, version, mtime, datetime.now(timezone.utc),
             json.dumps(stats)] + [cols[c] for c in cols]
     setclause = ", ".join(f"{f}=%s" for f in fields)
-    n = conn.execute(f"UPDATE auto_underwriting SET {setclause} WHERE listing_id=%s",
+    n = conn.execute(f"UPDATE auto_underwriting SET {setclause} WHERE {key}=%s",
                      (*vals, lid)).rowcount
     if not n:
         conn.execute(
-            f"INSERT INTO auto_underwriting (listing_id, {', '.join(fields)}) "
+            f"INSERT INTO auto_underwriting ({key}, {', '.join(fields)}) "
             f"VALUES (%s, {', '.join(['%s']*len(fields))})", (lid, *vals))
     # NOI + cap into listing_financials (model is authoritative here)
-    if "noi" in flat or "in_place_cap" in flat:
+    if kind == "listing" and ("noi" in flat or "in_place_cap" in flat):
         conn.execute(
             "INSERT INTO listing_financials (listing_id, noi, cap_rate, data_source, confidence) "
             "VALUES (%s,%s,%s,'uw_model','high') ON CONFLICT (listing_id) DO UPDATE SET "
@@ -114,7 +117,7 @@ def sync_one(conn, lid, address, ref, log, mode="local", svc=None, dry=False):
     # unit mix from the model's rent roll (authoritative for the deal) -> unit_mix
     # table; only replace when the model actually yielded a mix, so we never wipe
     # an ingestion-parsed mix with nothing.
-    if um:
+    if um and kind == "listing":
         conn.execute("DELETE FROM unit_mix WHERE listing_id=%s", (lid,))
         for u in um:
             delta = None
@@ -127,7 +130,7 @@ def sync_one(conn, lid, address, ref, log, mode="local", svc=None, dry=False):
     # log moved figures
     for k, v in flat.items():
         pv = prior.get(k)
-        if pv != v:
+        if pv != v and kind == "listing":
             conn.execute(
                 "INSERT INTO listing_history (listing_id, field, old_value, new_value) "
                 "VALUES (%s,%s,%s,%s)", (lid, f"uw.{k}", None if pv is None else str(pv), str(v)))
@@ -160,15 +163,19 @@ def run_sync(mode=None, dry=False, log=print):
         col, where, src = "drive_folder_id", "drive_folder_id IS NOT NULL AND drive_folder_id <> ''", "Google Drive API"
     else:
         col, where, src = "uw_folder", "uw_folder IS NOT NULL AND uw_folder <> ''", f"local mount: {UW_ROOT}"
-    rows = conn.execute(
+    rows = [("listing", *r) for r in conn.execute(
         f"SELECT id, address, {col} FROM listings WHERE {where} "
-        "AND status IN ('underwriting','loi_sent','under_contract','lead') "
-        "ORDER BY id").fetchall()
+        "AND status IN ('underwriting','loi_sent','under_contract') AND package_id IS NULL "
+        "ORDER BY id").fetchall()]
+    if mode == "drive":  # packages carry a Drive folder id too (no local uw_folder column)
+        rows += [("package", *r) for r in conn.execute(
+            "SELECT id, name, drive_folder_id FROM packages WHERE drive_folder_id IS NOT NULL "
+            "AND status IN ('underwriting','loi_sent','under_contract') ORDER BY id").fetchall()]
     log(f"[uw-sync] {'(DRY) ' if dry else ''}[{mode}] {len(rows)} deal(s) — {src}")
     tally = {}
-    for lid, addr, ref in rows:
+    for kind, lid, addr, ref in rows:
         try:
-            r = sync_one(conn, lid, addr, ref, log, mode=mode, svc=svc, dry=dry)
+            r = sync_one(conn, lid, addr, ref, log, mode=mode, svc=svc, dry=dry, kind=kind)
         except Exception as e:
             log(f"  #{lid} {addr}: ERROR {type(e).__name__}: {e}")
             r = "error"

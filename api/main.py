@@ -273,6 +273,11 @@ def inbox(_auth=Depends(require_auth)):
             "o.terms->>'acceptance_date' AS acceptance_date FROM offers o LEFT JOIN listings l ON l.id=o.listing_id "
             "LEFT JOIN packages pk ON pk.id=o.package_id WHERE o.response='pending' ORDER BY o.offer_date"),
         "actions_due": db.query("SELECT * FROM v_action_items_open WHERE due_on <= CURRENT_DATE + 7 ORDER BY due_on"),
+        # split view (Ben, 10/13): to-do = open items due within 14 days or undated; waiting = ball in someone else's court
+        "actions_todo": db.query("SELECT * FROM v_action_items_open WHERE status='open' AND due_on <= CURRENT_DATE + 14 ORDER BY due_on, id"),
+        "actions_undated": db.query("SELECT * FROM v_action_items_open WHERE status='open' AND due_on IS NULL ORDER BY updated_at DESC, id"),
+        "actions_later": db.one("SELECT count(*) AS n FROM v_action_items_open WHERE status='open' AND due_on > CURRENT_DATE + 14")["n"],
+        "actions_waiting": db.query("SELECT * FROM v_action_items_open WHERE status='waiting' ORDER BY due_on NULLS LAST, id"),
     }
 
 

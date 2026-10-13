@@ -39,26 +39,21 @@ _SUMMARY_HINT = re.compile(r"(sum|overview|return|output|dashboard|snapshot)", r
 
 
 def find_latest_model(deal_folder, analysis_sub="4.0 Investment Analysis"):
-    """Given a deal folder (…/2.0 Underwriting/<deal>), return the newest UW
-    workbook in its 4.0 Investment Analysis folder, or None.
-    Prefers the highest _vNN; falls back to most-recently-modified."""
+    """Given a deal folder, return the newest UW workbook: looks in 4.0 Investment Analysis,
+    then files/, then the folder root. Family-aware pick (see drive_client.pick_latest)."""
+    from ingest.drive_client import pick_latest
     base = os.path.join(deal_folder, analysis_sub)
     if not os.path.isdir(base):
-        base = deal_folder  # some deals keep the model at the folder root
-    files = [f for f in glob.glob(os.path.join(base, "*.xlsx"))
-             if not os.path.basename(f).startswith("~$")]
-    if not files:
+        base = os.path.join(deal_folder, "files") if os.path.isdir(os.path.join(deal_folder, "files")) else deal_folder
+    files = [{"name": os.path.basename(f), "path": f, "mtime": os.path.getmtime(f)}
+             for f in glob.glob(os.path.join(base, "*.xlsx"))]
+    best = pick_latest(files, time_key="mtime")
+    if not best:
         return None
-
-    def ver(f):
-        m = re.search(r"[_ ]v(\d+)\.xlsx$", os.path.basename(f), re.I)
-        return int(m.group(1)) if m else -1
-    files.sort(key=lambda f: (ver(f), os.path.getmtime(f)))
-    best = files[-1]
-    m = re.search(r"[_ ]v(\d+)\.xlsx$", os.path.basename(best), re.I)
-    return {"path": best, "filename": os.path.basename(best),
+    m = re.search(r"[_ ]v(\d+)\.xlsx$", best["name"], re.I)
+    return {"path": best["path"], "filename": best["name"],
             "version": (f"v{m.group(1)}" if m else None),
-            "mtime": os.path.getmtime(best)}
+            "mtime": best["mtime"]}
 
 
 def _num(v):

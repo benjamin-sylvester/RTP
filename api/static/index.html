@@ -58,10 +58,29 @@ main{padding:26px 0 70px}
 .eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);font-weight:500}
 .section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin:0 0 16px}
 .section-head .note{padding-bottom:3px}
-.kv .acts{display:inline-flex;gap:4px;margin-left:8px;vertical-align:middle}
-.kv .acts button{border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);font:inherit;font-size:11.5px;font-weight:500;padding:2px 9px;border-radius:999px;cursor:pointer;line-height:1.5}
-.kv .acts button:hover{border-color:var(--brand);color:var(--brand)} .kv .acts button.ok{border-color:var(--st-active);color:var(--st-active)} .kv .acts button.danger{border-color:var(--st-lost);color:var(--st-lost)}
-.kv .due{display:inline-block;min-width:44px;color:var(--muted);font-family:var(--font-mono);font-size:12px} .kv .due.late{color:var(--st-lost)}
+/* inbox */
+.ibx-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px} @media(max-width:700px){.ibx-stats{grid-template-columns:1fr}}
+.ibx-stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:13px 16px;display:flex;align-items:baseline;justify-content:space-between;cursor:pointer}
+.ibx-stat:hover{border-color:var(--brand)} .ibx-stat .k{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.ibx-stat .v{font-family:var(--font-display);font-size:26px;font-weight:500} .ibx-stat .v.warn{color:var(--st-lost)}
+.ibx-cols{display:grid;grid-template-columns:3fr 2fr;gap:15px;align-items:start} @media(max-width:860px){.ibx-cols{grid-template-columns:1fr}}
+.ibx-list{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--raise);overflow:hidden}
+.ibx-list .hd{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.ibx-list .hd h3{font-size:12px;font-family:var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0} .ibx-list .hd .n{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+.ibx-list .empty{padding:22px}
+.task{display:grid;grid-template-columns:58px 1fr auto;gap:12px;align-items:start;padding:11px 16px;border-bottom:1px solid var(--line)} .task:last-child{border-bottom:0} .task:hover{background:var(--surface-2)}
+.task .when{font-family:var(--font-mono);font-size:11.5px;color:var(--muted);padding-top:3px;line-height:1.3} .task .when.late{color:var(--st-lost);font-weight:600} .task .when.today{color:var(--accent);font-weight:600}
+.task .t{font-size:13.5px;line-height:1.45;color:var(--ink)} .task .who{display:inline-block;margin-left:6px;font-size:11.5px;color:var(--brand-2);background:var(--st-comp-bg);padding:1px 7px;border-radius:6px}
+.task .ctx{font-size:12px;color:var(--muted);margin-top:2px;max-width:640px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.task .acts{display:flex;gap:4px;opacity:0;transition:opacity .12s;padding-top:1px} .task:hover .acts,.task:focus-within .acts{opacity:1} @media(hover:none){.task .acts{opacity:1}}
+.task .acts button{border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);font:inherit;font-size:11px;font-weight:500;padding:2px 8px;border-radius:999px;cursor:pointer;line-height:1.5;white-space:nowrap}
+.task .acts button:hover{border-color:var(--brand);color:var(--brand)} .task .acts button.ok{border-color:var(--st-active);color:var(--st-active)} .task .acts button.danger{border-color:var(--st-lost);color:var(--st-lost)}
+.ibx-small{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:15px} @media(max-width:860px){.ibx-small{grid-template-columns:1fr}}
+.ibx-small .card h3{margin-bottom:8px} .ibx-small .row{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--line);font-size:12.5px} .ibx-small .row:last-child{border-bottom:0}
+.ibx-small .row .k{color:var(--ink)} .ibx-small .row .v{color:var(--muted);font-family:var(--font-mono);font-size:11.5px;text-align:right;white-space:nowrap}
+.ibx-small .row .acts{display:inline-flex;gap:4px;margin-left:6px} .ibx-small .row .acts button{border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);font:inherit;font-size:10.5px;padding:1px 7px;border-radius:999px;cursor:pointer}
+.ibx-small .ok{color:var(--st-active)} .ibx-small .bad{color:var(--st-lost)}
+details.ibx-log{margin-top:14px;font-size:12.5px;color:var(--muted)} details.ibx-log summary{cursor:pointer} details.ibx-log .row{display:flex;gap:12px;padding:3px 0;font-family:var(--font-mono);font-size:11.5px}
 .section-head h2{font-size:22px} .note{font-size:12.5px;color:var(--muted)}
 .panel{display:none} .panel.on{display:block;animation:rise .35s ease both}
 @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -243,8 +262,14 @@ tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
   </section>
   <!-- INBOX -->
   <section class="panel on" id="inbox">
-    <div class="section-head"><div><div class="eyebrow">Everything waiting for a human</div><h2>Inbox</h2></div><div class="note" id="inbox-note"></div></div>
-    <div id="inbox-body"></div>
+    <div class="section-head"><div><div class="eyebrow">What needs you · kept current by the daily review</div><h2>Inbox</h2></div><div class="note" id="inbox-note"></div></div>
+    <div class="ibx-stats" id="ibx-stats"></div>
+    <div class="ibx-cols">
+      <div class="ibx-list" id="ibx-todo"></div>
+      <div class="ibx-list" id="ibx-waiting"></div>
+    </div>
+    <div class="ibx-small" id="ibx-small"></div>
+    <details class="ibx-log"><summary>Recent job runs</summary><div id="ibx-runs"></div></details>
   </section>
 
   <section class="panel" id="detailpanel"><div id="detail"></div></section>
@@ -563,18 +588,33 @@ async function loadInvestors(){
 /* inbox */
 async function loadInbox(){
   try{const d=await(await api('/api/inbox')).json();
-    const sec=(title,rows,render,empty)=>`<div class="card wide" style="margin-bottom:14px"><h3>${title}${rows.length?` <span class="mut">(${rows.length})</span>`:''}</h3>${rows.length?rows.map(render).join(''):`<div class="mut">${empty}</div>`}</div>`;
-    const total=d.jobs_missing.length+d.review.length+d.needs_review.length+d.offers_overdue.length+d.actions_due.length;
-    document.getElementById('inbox-note').textContent=total?`${total} items`:'Nothing waiting';
-    document.getElementById('inbox-body').innerHTML=
-      sec('Jobs that did not run',d.jobs_missing,j=>`<div class="kv"><span class="k">${esc(j.job)}</span><span class="v">every ${esc(j.expected_every)} · last ok ${j.last_ok?esc(j.last_ok.slice(0,16).replace('T',' ')):'never'} · last ${esc(j.last_status||'—')}</span></div>`,'All scheduled jobs ran on time.')+
-      sec('Offers awaiting a response',d.offers_overdue,o=>`<div class="kv"><span class="k">#${o.id} ${esc(o.name)}</span><span class="v">${esc(o.offer_type)} ${dt(o.offer_date)} ${money(o.price_cents)}${o.acceptance_date?' · accept by '+esc(o.acceptance_date):''} <a href="#" onclick="openDeal('${o.listing_id?'listing':'package'}',${o.listing_id||o.package_id});return false">open</a></span></div>`,'No pending offers.')+
-      sec('Action items due in 7 days',d.actions_due,a=>{const late=a.due_on&&a.due_on<new Date().toISOString().slice(0,10);return `<div class="kv"><span class="due${late?' late':''}">${dt(a.due_on).slice(5)}</span><span class="v">${esc(a.title)}${a.about_person?' <span class="mut">· '+esc(a.about_person)+'</span>':''}${a.about_org?' <span class="mut">· '+esc(a.about_org)+'</span>':''}<span class="acts"><button class="ok" onclick="setAction(${a.id},'done')">done</button><button onclick="setAction(${a.id},'waiting')">waiting</button><button onclick="snoozeAction(${a.id},7)">+1 week</button><button class="danger" onclick="setAction(${a.id},'dropped')">drop</button></span></span></div>`},'Nothing due this week.')+
-      sec('Review queue',d.review,r=>`<div class="kv"><span class="k">${esc(r.kind.replace(/_/g,' '))}</span><span class="v mono">${esc(JSON.stringify(r.payload||{}).slice(0,160))}<span class="acts"><button class="ok" onclick="resolveReview(${r.id},'resolved')">resolved</button><button onclick="resolveReview(${r.id},'dismissed')">dismiss</button></span></span></div>`,'Queue is empty.')+
-      sec('Listings at needs review',d.needs_review,l=>`<div class="kv"><span class="k"><a href="#" onclick="openDeal('listing',${l.id});return false">#${l.id} ${esc(l.address)}, ${esc(l.city)} ${esc(l.state)}</a></span><span class="v">${l.units||'?'}u · ${money(l.asking_price)} · ${esc(l.source||'')} · ${dt(l.date_ingested)}</span></div>`,'None.')+
-      sec('Recent job runs',d.job_runs,j=>`<div class="kv"><span class="k">${esc(j.job)}</span><span class="v mono">${esc(j.started_at.slice(0,16).replace('T',' '))} · ${esc(j.status)} · ${esc(JSON.stringify(j.counts||{}).slice(0,120))}</span></div>`,'No runs recorded yet.');
-  }catch(e){}
+    const today=new Date().toISOString().slice(0,10);
+    const whenCell=a=>{if(!a.due_on)return '<span class="when">no date</span>';const late=a.due_on<today,tod=a.due_on===today;const lab=tod?'today':late?`${Math.round((new Date(today)-new Date(a.due_on))/864e5)}d late`:dt(a.due_on).slice(5);return `<span class="when${late?' late':tod?' today':''}">${lab}</span>`;};
+    const about=a=>[a.about_person,a.about_org,a.about_listing,a.about_package,a.about_property,a.about_entity].filter(Boolean)[0];
+    const task=(a,waiting)=>`<div class="task">${whenCell(a)}<div><div class="t">${esc(a.title)}${about(a)?`<span class="who">${esc(about(a))}</span>`:''}</div>${a.details?`<div class="ctx" title="${esc(a.details)}">${esc(a.details.replace(/^\[[^\]]*\]\s*/,''))}</div>`:''}</div>
+      <div class="acts"><button class="ok" onclick="setAction(${a.id},'done')">done</button>${waiting?`<button onclick="setAction(${a.id},'open')">to do</button>`:`<button onclick="setAction(${a.id},'waiting')">waiting</button>`}<button onclick="snoozeAction(${a.id},7)">+1 wk</button><button class="danger" onclick="setAction(${a.id},'dropped')">drop</button></div></div>`;
+    const list=(el,title,rows,waiting,empty,foot)=>{document.getElementById(el).innerHTML=`<div class="hd"><h3>${title}</h3><span class="n">${rows.length}</span></div>${rows.length?rows.map(a=>task(a,waiting)).join(''):`<div class="empty mut">${empty}</div>`}${foot||''}`;};
+    const late=d.actions_todo.filter(a=>a.due_on&&a.due_on<today).length;
+    window._undated=d.actions_undated||[];
+    const foot=[d.actions_later?`${d.actions_later} due after 14 days`:'',window._undated.length?`<a href="#" onclick="toggleUndated();return false">${window._undated.length} without a date</a>`:''].filter(Boolean).join(' · ');
+    list('ibx-todo','To do',d.actions_todo,false,'Nothing dated in the next two weeks.',foot?`<div class="task" id="ibx-foot"><span class="when">more</span><div class="t mut">${foot}</div><div></div></div><div id="ibx-undated"></div>`:'');
+    list('ibx-waiting','Waiting on others',d.actions_waiting,true,'Nothing outstanding from anyone.');
+    const attention=d.jobs_missing.length+d.offers_overdue.length+d.review.length+d.needs_review.length;
+    document.getElementById('ibx-stats').innerHTML=[['To do',d.actions_todo.length,late?`${late} late`:'',late>0,'ibx-todo'],['Waiting on others',d.actions_waiting.length,'',false,'ibx-waiting'],['Needs attention',attention,attention?'jobs · offers · review':'all clear',attention>0,'ibx-small']]
+      .map(([k,v,sub,warn,target])=>`<div class="ibx-stat" onclick="document.getElementById('${target}').scrollIntoView({behavior:'smooth',block:'start'})"><div><div class="k">${k}</div>${sub?`<div class="mut" style="font-size:12px">${sub}</div>`:''}</div><div class="v${warn?' warn':''}">${v}</div></div>`).join('');
+    document.getElementById('inbox-note').textContent=`${d.actions_todo.length+d.actions_waiting.length+attention} items`;
+    const row=(k,v)=>`<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`;
+    const jobs=d.jobs_missing.length?d.jobs_missing.map(j=>row(`<span class="bad">${esc(j.job)}</span>`,j.last_ok?'last ok '+esc(j.last_ok.slice(5,16).replace('T',' ')):'never ran')).join(''):row('<span class="ok">All jobs on schedule</span>','');
+    const offers=d.offers_overdue.length?d.offers_overdue.map(o=>row(`<a href="#" onclick="openDeal('${o.listing_id?'listing':'package'}',${o.listing_id||o.package_id});return false">${esc(o.name)}</a>`,`${esc(o.offer_type)} ${dt(o.offer_date).slice(5)} · ${money(o.price_cents)}${o.acceptance_date&&o.acceptance_date<today?' · <span class="bad">past '+esc(o.acceptance_date.slice(5))+'</span>':''}`)).join(''):row('<span class="mut">No pending offers</span>','');
+    const review=[...d.review.map(r=>row(esc(r.kind.replace(/_/g,' '))+(r.payload&&r.payload.person?` <span class="mut">· ${esc(r.payload.person)}</span>`:''),`<span class="acts"><button onclick="resolveReview(${r.id},'resolved')">resolved</button><button onclick="resolveReview(${r.id},'dismissed')">dismiss</button></span>`)),
+      ...d.needs_review.map(l=>row(`<a href="#" onclick="openDeal('listing',${l.id});return false">${esc(l.address)}, ${esc(l.city)}</a>`,`${l.units||'?'}u · ${money(l.asking_price)}`))].join('')||row('<span class="mut">Queue is empty</span>','');
+    document.getElementById('ibx-small').innerHTML=`<div class="card"><h3>Jobs</h3>${jobs}</div><div class="card"><h3>Offers pending</h3>${offers}</div><div class="card"><h3>Review queue</h3>${review}</div>`;
+    document.getElementById('ibx-runs').innerHTML=d.job_runs.map(j=>`<div class="row"><span>${esc(j.started_at.slice(5,16).replace('T',' '))}</span><span>${esc(j.job)}</span><span class="${j.status==='ok'?'ok':'bad'}">${esc(j.status)}</span><span class="mut">${esc(JSON.stringify(j.counts||{}).slice(0,100))}</span></div>`).join('')||'<div class="mut">No runs recorded yet.</div>';
+  }catch(e){console.error(e);}
 }
+function toggleUndated(){const el=document.getElementById('ibx-undated');if(!el)return;if(el.innerHTML){el.innerHTML='';return;}
+  const about=a=>[a.about_person,a.about_org,a.about_listing,a.about_package,a.about_property,a.about_entity].filter(Boolean)[0];
+  el.innerHTML=window._undated.map(a=>`<div class="task"><span class="when">no date</span><div><div class="t">${esc(a.title)}${about(a)?`<span class="who">${esc(about(a))}</span>`:''}</div>${a.details?`<div class="ctx" title="${esc(a.details)}">${esc(a.details.replace(/^\[[^\]]*\]\s*/,''))}</div>`:''}</div><div class="acts"><button class="ok" onclick="setAction(${a.id},'done')">done</button><button onclick="setAction(${a.id},'waiting')">waiting</button><button onclick="snoozeAction(${a.id},7)">+1 wk</button><button class="danger" onclick="setAction(${a.id},'dropped')">drop</button></div></div>`).join('');}
 async function snoozeAction(id,days){try{await api(`/api/actions/${id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({snooze_days:days})});toast(`moved ${days} days`);loadInbox();}catch(e){}}
 async function setAction(id,status){try{await api(`/api/actions/${id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});toast(`action ${status}`);loadInbox();}catch(e){}}
 async function resolveReview(id,status){try{await api(`/api/inbox/review/${id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});toast(status);loadInbox();}catch(e){}}

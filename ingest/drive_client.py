@@ -56,20 +56,36 @@ def find_subfolder(svc, parent_id, name):
     return fs[0]["id"] if fs else None
 
 
-def latest_model(svc, folder_id, analysis_sub="4.0 Investment Analysis"):
-    """Newest UW workbook in <deal folder>/4.0 Investment Analysis. Prefers the
-    highest _vNN, falls back to most-recently-modified. Returns a dict or None."""
-    sub = find_subfolder(svc, folder_id, analysis_sub) or folder_id
-    q = f"'{sub}' in parents and mimeType='{XLSX_MIME}' and trashed=false"
-    files = [f for f in _list(svc, q) if not f["name"].startswith("~$")]
+def pick_latest(files, name_key="name", time_key="modifiedTime"):
+    """Choose the model to sync from a list of workbook records.
+    Rule (10/13/26): group files by family (name with the _vNN suffix removed), take the
+    family touched most recently, then the highest version inside it. This stops an old
+    'Master BOE_v65' from beating this week's 'Seacoast 8 Pack_v22' just because 65 > 22."""
+    def ver(f):
+        m = re.search(r"[_ ]v(\d+)\.xlsx$", f[name_key], re.I)
+        return int(m.group(1)) if m else -1
+
+    def family(f):
+        return re.sub(r"[_ ]v\d+\.xlsx$", "", f[name_key], flags=re.I).strip().lower()
+    files = [f for f in files if not f[name_key].startswith("~$")]
     if not files:
         return None
+    fams = {}
+    for f in files:
+        fams.setdefault(family(f), []).append(f)
+    newest_family = max(fams.values(), key=lambda fs: max(str(f[time_key]) for f in fs))
+    newest_family.sort(key=lambda f: (ver(f), str(f[time_key])))
+    return newest_family[-1]
 
-    def ver(f):
-        m = re.search(r"[_ ]v(\d+)\.xlsx$", f["name"], re.I)
-        return int(m.group(1)) if m else -1
-    files.sort(key=lambda f: (ver(f), f["modifiedTime"]))
-    best = files[-1]
+
+def latest_model(svc, folder_id, analysis_sub="4.0 Investment Analysis"):
+    """Newest UW workbook for a deal folder. Looks in <folder>/4.0 Investment Analysis,
+    then <folder>/files (the 6.0 Claude deal folders), then the folder itself."""
+    sub = find_subfolder(svc, folder_id, analysis_sub) or find_subfolder(svc, folder_id, "files") or folder_id
+    q = f"'{sub}' in parents and mimeType='{XLSX_MIME}' and trashed=false"
+    best = pick_latest(_list(svc, q))
+    if not best:
+        return None
     m = re.search(r"[_ ]v(\d+)\.xlsx$", best["name"], re.I)
     return {"id": best["id"], "filename": best["name"],
             "version": (f"v{m.group(1)}" if m else None),
