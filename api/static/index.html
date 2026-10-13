@@ -58,6 +58,10 @@ main{padding:26px 0 70px}
 .eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);font-weight:500}
 .section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin:0 0 16px}
 .section-head .note{padding-bottom:3px}
+.kv .acts{display:inline-flex;gap:4px;margin-left:8px;vertical-align:middle}
+.kv .acts button{border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);font:inherit;font-size:11.5px;font-weight:500;padding:2px 9px;border-radius:999px;cursor:pointer;line-height:1.5}
+.kv .acts button:hover{border-color:var(--brand);color:var(--brand)} .kv .acts button.ok{border-color:var(--st-active);color:var(--st-active)} .kv .acts button.danger{border-color:var(--st-lost);color:var(--st-lost)}
+.kv .due{display:inline-block;min-width:44px;color:var(--muted);font-family:var(--font-mono);font-size:12px} .kv .due.late{color:var(--st-lost)}
 .section-head h2{font-size:22px} .note{font-size:12.5px;color:var(--muted)}
 .panel{display:none} .panel.on{display:block;animation:rise .35s ease both}
 @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -174,12 +178,12 @@ tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
 <header><div class="wrap bar">
   <a class="brand" href="/"><span class="logo"><svg viewBox="0 0 100 100"><rect width="100" height="100" rx="3" fill="var(--brand)"/><path d="M12 62 C24 74 40 72 54 56 C68 40 84 39 92 48" stroke="var(--surface)" stroke-width="5" stroke-linecap="round" fill="none"/></svg></span><span class="wordmark"><span class="wm">Rising Tide Partners</span><span class="sub">Multifamily Real Estate</span></span></a>
   <nav class="tabs" role="tablist">
-    <button class="tab" role="tab" data-panel="live" aria-selected="true">Live Pipeline</button>
-    <button class="tab" role="tab" data-panel="deals" aria-selected="false">Deals</button>
+    <button class="tab" role="tab" data-panel="inbox" aria-selected="true">Inbox</button>
+    <button class="tab" role="tab" data-panel="live" aria-selected="false">Live Pipeline</button>
+    <button class="tab" role="tab" data-panel="deals" aria-selected="false">Database</button>
     <button class="tab" role="tab" data-panel="map" aria-selected="false">Map</button>
     <button class="tab" role="tab" data-panel="stats" aria-selected="false">Analytics</button>
     <button class="tab" role="tab" data-panel="investors" aria-selected="false">Investors</button>
-    <button class="tab" role="tab" data-panel="inbox" aria-selected="false">Inbox</button>
   </nav>
   <button class="iconbtn" id="theme" title="Toggle theme">◐</button>
   <button class="iconbtn" onclick="logout()">Log out</button>
@@ -187,27 +191,22 @@ tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
 
 <main class="wrap">
   <!-- LIVE -->
-  <section class="panel on" id="live">
-    <div class="section-head"><div><div class="eyebrow">Active · Small-balance multifamily · NH + MA SouthCoast</div><h2>Live Pipeline</h2></div><div class="note" id="live-note"></div></div>
+  <section class="panel" id="live">
+    <div class="section-head"><div><div class="eyebrow">Deals RTP is underwriting or bidding on · listings and packages</div><h2>Live Pipeline</h2></div><div class="note" id="live-note"></div></div>
     <div class="snapshot" id="snapshot"></div>
     <div class="deals" id="live-deals"></div>
     <div class="callout"><b>Underwriting figures sync nightly from Drive.</b> Cap rate, NOI and basis below are pulled from each deal's latest model every morning. Returns (IRR/multiple) are shown as the model states them; open a deal for full detail.</div>
   </section>
   <!-- DEALS -->
   <section class="panel" id="deals">
-    <div class="section-head"><div><div class="eyebrow">Browse everything · comps · review queue</div><h2>Deals</h2></div><div class="note" id="deals-note"></div></div>
+    <div class="section-head"><div><div class="eyebrow">The master database · every listing, comp and package</div><h2>Database</h2></div><div class="note" id="deals-note"></div></div>
     <div class="filters">
+      <label>Status<select id="f-status"><option value="all">everything</option><option value="lead">leads</option><option value="underwriting,loi_sent,under_contract">live</option><option value="comp_only">comps</option><option value="passed,lost">passed / lost</option><option value="owned">owned</option><option value="needs_review">needs review</option></select></label>
       <label>Tier<select id="f-tier"><option value="">any</option><option>Priority</option><option>Watch</option><option>Pass</option></select></label>
       <label>City<input id="f-city" placeholder="Manchester"></label>
       <label>Units ≥<input id="f-umin" type="number" min="0"></label>
       <label>Units ≤<input id="f-umax" type="number" min="0"></label>
-      <div class="toggles">
-        <label><input type="checkbox" id="t-comps"> comps</label>
-        <label><input type="checkbox" id="t-owned"> owned</label>
-        <label><input type="checkbox" id="t-needs"> needs review</label>
-        <label><input type="checkbox" id="t-quiet"> incl. quiet</label>
-        <label><input type="checkbox" id="t-closed"> passed/lost</label>
-      </div>
+
     </div>
     <div class="tablecard"><div class="tscroll"><table><thead><tr id="head"></tr></thead><tbody id="tbody"></tbody></table></div>
       <div class="empty" id="empty" hidden>No deals match these filters.</div></div>
@@ -243,7 +242,7 @@ tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
     <div class="tablecard"><div class="tscroll"><table><thead><tr><th>Entity</th><th>Investor</th><th>Funded</th><th>Ownership</th><th>GP</th></tr></thead><tbody id="pos-body"></tbody></table></div></div>
   </section>
   <!-- INBOX -->
-  <section class="panel" id="inbox">
+  <section class="panel on" id="inbox">
     <div class="section-head"><div><div class="eyebrow">Everything waiting for a human</div><h2>Inbox</h2></div><div class="note" id="inbox-note"></div></div>
     <div id="inbox-body"></div>
   </section>
@@ -323,14 +322,14 @@ function renderLive(d){
     }
     const um=((x.model_stats&&x.model_stats.unit_mix)||[]).filter(u=>u.count).map(u=>`<span class="u"><b>${u.count}</b> ${u.unit_type}${u.avg_rent?` <span style="color:var(--muted)">$${u.avg_rent}</span>`:''}</span>`).join('');
     const contact=x.broker_name?`<span class="lbl">Broker </span>${x.broker_email?`<a href="mailto:${x.broker_email}" onclick="event.stopPropagation()">${x.broker_name}</a>`:x.broker_name}`:`<span class="lbl">Source </span>${x.source==='mls_export'?'MLS':'Broker email'}`;
-    return `<article class="deal" onclick="openDeal('listing',${x.id})"><div class="stripe"></div><div class="body">
+    return `<article class="deal" onclick="openDeal('${x.deal_kind||'listing'}',${x.id})"><div class="stripe"></div><div class="body">
       <div class="deal-top"><div><div class="name">${x.address}</div>
-        <div class="loc"><b>${x.city}, ${x.state}</b> · #${x.id} · via ${x.account==='rtp'?'RTP inbox':x.account==='personal'?'personal inbox':'MLS'}${tagline}</div></div>
+        <div class="loc"><b>${x.city}, ${x.state}</b> · ${x.deal_kind==='package'?'package':'#'+x.id}${x.offers?` · ${x.offers} offer${x.offers>1?'s':''}, last ${dt(x.last_offer_date)}`:''}${x.drive_folder_id?` · <a href="https://drive.google.com/drive/folders/${x.drive_folder_id}" target="_blank" onclick="event.stopPropagation()">Drive</a>`:''}${tagline}</div></div>
         <span class="pill ${x.status}">${st.label}</span></div>
       <div class="metrics">${metrics}</div>${um?`<div class="umix">${um}</div>`:''}
       <div class="deal-foot"><div class="contact">${contact}</div>${foot}</div></div></article>`;
   }).join('');
-  document.getElementById('live-note').textContent=P.length+' active';
+  document.getElementById('live-note').innerHTML=P.length+' live'+(d.leads?` · <a href="#" onclick="document.getElementById('f-status').value='lead';show('deals');return false">${d.leads} leads not yet underwritten</a>`:'');
 }
 
 /* ---- DEALS TABLE ---- */
@@ -342,11 +341,11 @@ let DEALS=[],sortCol=null,sortDir=-1;
 const val=id=>document.getElementById(id).value.trim(),chk=id=>document.getElementById(id).checked;
 function qs(){const p=new URLSearchParams();const m={'f-tier':'tier','f-city':'city','f-umin':'units_min','f-umax':'units_max'};
   for(const[id,key]of Object.entries(m)){const v=val(id);if(v)p.set(key,v);}
-  if(chk('t-comps'))p.set('comps','true');if(chk('t-owned'))p.set('owned','true');if(chk('t-needs'))p.set('needs_review','true');if(chk('t-quiet'))p.set('quiet','true');if(chk('t-closed'))p.set('closed','true');
+  p.set('status',val('f-status')||'all');p.set('limit','500');
   return p.toString();}
 async function loadDeals(){
   try{const d=await(await api('/api/deals?'+qs())).json();DEALS=d.deals;
-    document.getElementById('deals-note').textContent=`${d.count} deal${d.count!==1?'s':''}`;renderTable();}catch(e){}
+    document.getElementById('deals-note').textContent=`${d.count} row${d.count!==1?'s':''}`;renderTable();}catch(e){}
 }
 function srcCell(d){if(['mls_export','mlspin','primemls'].includes(d.source))return '<span class="mut">MLS</span>';
   if(d.broker_email)return `<a href="mailto:${d.broker_email}" onclick="event.stopPropagation()">${d.broker_name||d.broker_email}</a>`;return d.broker_name||(d.source?`<span class="mut">${d.source}</span>`:'—');}
@@ -570,19 +569,20 @@ async function loadInbox(){
     document.getElementById('inbox-body').innerHTML=
       sec('Jobs that did not run',d.jobs_missing,j=>`<div class="kv"><span class="k">${esc(j.job)}</span><span class="v">every ${esc(j.expected_every)} · last ok ${j.last_ok?esc(j.last_ok.slice(0,16).replace('T',' ')):'never'} · last ${esc(j.last_status||'—')}</span></div>`,'All scheduled jobs ran on time.')+
       sec('Offers awaiting a response',d.offers_overdue,o=>`<div class="kv"><span class="k">#${o.id} ${esc(o.name)}</span><span class="v">${esc(o.offer_type)} ${dt(o.offer_date)} ${money(o.price_cents)}${o.acceptance_date?' · accept by '+esc(o.acceptance_date):''} <a href="#" onclick="openDeal('${o.listing_id?'listing':'package'}',${o.listing_id||o.package_id});return false">open</a></span></div>`,'No pending offers.')+
-      sec('Action items due in 7 days',d.actions_due,a=>`<div class="kv"><span class="k mono">${dt(a.due_on)}</span><span class="v">${esc(a.title)}${a.about_person?' · '+esc(a.about_person):''}${a.about_org?' · '+esc(a.about_org):''} <button class="ok" onclick="setAction(${a.id},'done')">done</button> <button onclick="setAction(${a.id},'waiting')">waiting</button></span></div>`,'Nothing due this week.')+
-      sec('Review queue',d.review,r=>`<div class="kv"><span class="k">${esc(r.kind.replace(/_/g,' '))}</span><span class="v mono">${esc(JSON.stringify(r.payload||{}).slice(0,160))} <button class="ok" onclick="resolveReview(${r.id},'resolved')">resolved</button> <button onclick="resolveReview(${r.id},'dismissed')">dismiss</button></span></div>`,'Queue is empty.')+
+      sec('Action items due in 7 days',d.actions_due,a=>{const late=a.due_on&&a.due_on<new Date().toISOString().slice(0,10);return `<div class="kv"><span class="due${late?' late':''}">${dt(a.due_on).slice(5)}</span><span class="v">${esc(a.title)}${a.about_person?' <span class="mut">· '+esc(a.about_person)+'</span>':''}${a.about_org?' <span class="mut">· '+esc(a.about_org)+'</span>':''}<span class="acts"><button class="ok" onclick="setAction(${a.id},'done')">done</button><button onclick="setAction(${a.id},'waiting')">waiting</button><button onclick="snoozeAction(${a.id},7)">+1 week</button><button class="danger" onclick="setAction(${a.id},'dropped')">drop</button></span></span></div>`},'Nothing due this week.')+
+      sec('Review queue',d.review,r=>`<div class="kv"><span class="k">${esc(r.kind.replace(/_/g,' '))}</span><span class="v mono">${esc(JSON.stringify(r.payload||{}).slice(0,160))}<span class="acts"><button class="ok" onclick="resolveReview(${r.id},'resolved')">resolved</button><button onclick="resolveReview(${r.id},'dismissed')">dismiss</button></span></span></div>`,'Queue is empty.')+
       sec('Listings at needs review',d.needs_review,l=>`<div class="kv"><span class="k"><a href="#" onclick="openDeal('listing',${l.id});return false">#${l.id} ${esc(l.address)}, ${esc(l.city)} ${esc(l.state)}</a></span><span class="v">${l.units||'?'}u · ${money(l.asking_price)} · ${esc(l.source||'')} · ${dt(l.date_ingested)}</span></div>`,'None.')+
       sec('Recent job runs',d.job_runs,j=>`<div class="kv"><span class="k">${esc(j.job)}</span><span class="v mono">${esc(j.started_at.slice(0,16).replace('T',' '))} · ${esc(j.status)} · ${esc(JSON.stringify(j.counts||{}).slice(0,120))}</span></div>`,'No runs recorded yet.');
   }catch(e){}
 }
+async function snoozeAction(id,days){try{await api(`/api/actions/${id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({snooze_days:days})});toast(`moved ${days} days`);loadInbox();}catch(e){}}
 async function setAction(id,status){try{await api(`/api/actions/${id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});toast(`action ${status}`);loadInbox();}catch(e){}}
 async function resolveReview(id,status){try{await api(`/api/inbox/review/${id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});toast(status);loadInbox();}catch(e){}}
 
 /* toast + boot */
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.opacity=1;clearTimeout(t._h);t._h=setTimeout(()=>t.style.opacity=0,1800);}
 async function boot(){
-  let start='live';try{const s=localStorage.getItem('rtp_tab');if(s&&document.getElementById(s))start=s;}catch(e){}
+  let start='inbox';try{const s=localStorage.getItem('rtp_tab');if(s&&document.getElementById(s))start=s;}catch(e){}
   // probe auth via pipeline; on 401 the login shows
   try{await api('/api/health');}catch(e){return;}
   show(start);

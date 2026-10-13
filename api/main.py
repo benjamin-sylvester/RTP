@@ -76,8 +76,11 @@ def list_deals(
     limit: int = 200, offset: int = 0,
     _auth=Depends(require_auth),
 ):
-    # status set: explicit param wins; else active + requested toggles
-    if status:
+    # status set: explicit param wins ('all' = every status); legacy toggles still work
+    if status == "all":
+        statuses = list(freshness.VALID)
+        quiet = True
+    elif status:
         statuses = [s.strip() for s in status.split(",") if s.strip()]
     else:
         statuses = list(ACTIVE)
@@ -124,19 +127,36 @@ def list_deals(
 
 @app.get("/api/pipeline")
 def pipeline(_auth=Depends(require_auth)):
-    """Active deals with their synced UW-model figures — feeds the Live tab cards."""
+    """Live deals = the ones RTP is actually underwriting or bidding on (manual statuses
+    underwriting / loi_sent / under_contract), listings AND packages. Leads are not live
+    (Ben, 10/13/26): they stay in the Deals tab; the count is returned so the Live tab can say so."""
     rows = db.query(
-        "SELECT l.id, l.address, l.city, l.state, l.units, l.asking_price, l.price_per_unit, "
+        "SELECT * FROM ("
+        "SELECT 'listing' AS deal_kind, l.id, l.address, l.city, l.state, l.units, l.asking_price, l.price_per_unit, "
         "  l.year_built, l.status, l.source, l.broker_name, l.broker_email, l.account, "
-        "  l.drive_folder_id, l.latitude, l.longitude, "
+        "  l.drive_folder_id, l.uw_folder, l.latitude, l.longitude, "
         "  au.model_file, au.model_version, au.model_synced_at, au.model_stats, "
-        "  au.implied_cap_current, au.implied_cap_stabilized, au.score, au.tier "
+        "  au.implied_cap_current, au.implied_cap_stabilized, au.score, au.tier, "
+        "  (SELECT count(*) FROM offers o WHERE o.listing_id=l.id) AS offers, "
+        "  (SELECT max(o.offer_date) FROM offers o WHERE o.listing_id=l.id) AS last_offer_date "
         "FROM listings l LEFT JOIN auto_underwriting au ON au.listing_id = l.id "
-        "WHERE l.status IN ('underwriting','loi_sent','under_contract','lead') "
+        "WHERE l.status IN ('underwriting','loi_sent','under_contract') "
         "  AND l.package_id IS NULL AND l.merged_into_id IS NULL "
-        "ORDER BY CASE l.status WHEN 'under_contract' THEN 0 WHEN 'loi_sent' THEN 1 "
-        "         WHEN 'underwriting' THEN 2 ELSE 3 END, l.units DESC NULLS LAST")
-    return {"count": len(rows), "deals": rows}
+        "UNION ALL "
+        "SELECT 'package', p.id, p.name, p.market, p.state, "
+        "  COALESCE(p.total_units, (SELECT sum(units) FROM listings m WHERE m.package_id=p.id)), "
+        "  COALESCE(p.asking_price, (SELECT sum(asking_price) FROM listings m WHERE m.package_id=p.id)), NULL, NULL, "
+        "  p.status, 'package', p.broker_name, p.broker_email, NULL, p.drive_folder_id, NULL, NULL, NULL, "
+        "  au.model_file, au.model_version, au.model_synced_at, au.model_stats, "
+        "  au.implied_cap_current, au.implied_cap_stabilized, au.score, au.tier, "
+        "  (SELECT count(*) FROM offers o WHERE o.package_id=p.id), "
+        "  (SELECT max(o.offer_date) FROM offers o WHERE o.package_id=p.id) "
+        "FROM packages p LEFT JOIN auto_underwriting au ON au.package_id = p.id "
+        "WHERE p.status IN ('underwriting','loi_sent','under_contract') "
+        ") t ORDER BY CASE t.status WHEN 'under_contract' THEN 0 WHEN 'loi_sent' THEN 1 ELSE 2 END, t.units DESC NULLS LAST")
+    leads = db.one("SELECT count(*) AS n FROM listings WHERE status='lead' AND package_id IS NULL AND merged_into_id IS NULL "
+                   "AND last_seen_at > NOW() - make_interval(days => %s)", (freshness.active_lead_days(),))["n"]
+    return {"count": len(rows), "deals": rows, "leads": leads}
 
 
 @app.get("/api/map")
@@ -271,13 +291,18 @@ def resolve_review(item_id: int, payload: dict = Body(...), _auth=Depends(requir
 @app.post("/api/actions/{item_id}")
 def set_action(item_id: int, payload: dict = Body(...), _auth=Depends(require_auth)):
     status = (payload or {}).get("status")
-    if status not in ("open", "waiting", "done", "dropped"):
-        raise HTTPException(400, "bad status")
+    snooze = (payload or {}).get("snooze_days")
+    if status not in (None, "open", "waiting", "done", "dropped") or (status is None and not snooze):
+        raise HTTPException(400, "give status (open|waiting|done|dropped) or snooze_days")
     with db.connect() as conn:
-        conn.execute("UPDATE action_items SET status=%s, completed_at=CASE WHEN %s='done' THEN now() ELSE completed_at END WHERE id=%s",
-                     (status, status, item_id))
+        if snooze:
+            conn.execute("UPDATE action_items SET status='open', due_on=GREATEST(COALESCE(due_on, CURRENT_DATE), CURRENT_DATE) + %s WHERE id=%s",
+                         (int(snooze), item_id))
+        else:
+            conn.execute("UPDATE action_items SET status=%s, completed_at=CASE WHEN %s='done' THEN now() ELSE completed_at END WHERE id=%s",
+                         (status, status, item_id))
         conn.commit()
-    return {"ok": True, "id": item_id, "status": status}
+    return {"ok": True, "id": item_id, "status": status or "open", "snoozed": snooze}
 
 
 @app.get("/api/deals/{kind}/{deal_id}/comps")
