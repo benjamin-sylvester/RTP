@@ -58,6 +58,11 @@ main{padding:26px 0 70px}
 .eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);font-weight:500}
 .section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin:0 0 16px}
 .section-head .note{padding-bottom:3px}
+@media(max-width:700px){
+  .brand .wordmark{display:none} .bar{gap:8px;height:50px} nav.tabs{margin-left:0;overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none} nav.tabs::-webkit-scrollbar{display:none}
+  .tab{padding:6px 9px;font-size:13px;white-space:nowrap} .iconbtn{height:30px;padding:0 8px;font-size:12px;white-space:nowrap}
+  .section-head{flex-direction:column;align-items:flex-start;gap:4px} .wrap{padding:0 12px} main{padding-top:16px}
+}
 /* inbox */
 .ibx-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px} @media(max-width:700px){.ibx-stats{grid-template-columns:repeat(2,1fr)}}
 .ibx-stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px 14px;display:flex;align-items:baseline;justify-content:space-between;cursor:pointer;min-width:0}
@@ -630,7 +635,8 @@ async function loadInbox(){
       const link=linkFor(f);const isNew=lastSeen&&String(f.at)>lastSeen;
       html+=`<div class="task${isNew?' new':''}"><span class="ico ${f.kind}">${{touch:'touch',lead:'lead',price_cut:'cut',price_rise:'rise',sold:'sold',offer:'offer',status:'move',document:'doc'}[f.kind]||f.kind}</span><div style="min-width:0"><div class="t">${link?`<a href="#" onclick="${link};return false">${esc(f.title)}</a>`:esc(f.title)}${f.who?`<span class="who">${esc(f.who)}</span>`:''}</div>${f.sub?`<div class="ctx" style="display:block">${esc(f.sub)}</div>`:''}</div></div>`;}
     const newCount=lastSeen?feed.filter(f=>String(f.at)>lastSeen).length:feed.length;
-    document.getElementById('ibx-feed').innerHTML=`<div class="hd"><h3>What changed · last 3 days</h3><span class="n">${feed.length}${newCount?` · ${newCount} new`:''}</span></div>${html||'<div class="empty mut">Nothing logged in the last three days.</div>'}`;
+    const FEED_SHOW=10;const parts=html.split('<div class="task');const head=parts.slice(0,FEED_SHOW+1).join('<div class="task'),rest=parts.length>FEED_SHOW+1?'<div class="task'+parts.slice(FEED_SHOW+1).join('<div class="task'):'';
+    document.getElementById('ibx-feed').innerHTML=`<div class="hd"><h3>What changed · last 3 days</h3><span class="n">${feed.length}${newCount?` · ${newCount} new`:''}</span></div>${head||'<div class="empty mut">Nothing logged in the last three days.</div>'}${rest?`<div id="ibx-feed-rest" style="display:none">${rest}</div><div class="task"><span class="ico"></span><div class="t"><a href="#" onclick="const r=document.getElementById('ibx-feed-rest');r.style.display=r.style.display==='none'?'':'none';this.textContent=r.style.display==='none'?'show all ${feed.length}':'show less';return false">show all ${feed.length}</a></div></div>`:''}`;
     try{localStorage.setItem('rtp_inbox_seen',new Date().toISOString());}catch(e){}
     // to do, grouped by category
     const todo=d.actions_todo||[],late=todo.filter(a=>a.due_on&&a.due_on<today).length;
