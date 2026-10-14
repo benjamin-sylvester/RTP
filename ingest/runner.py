@@ -132,7 +132,9 @@ def run_once(commit=True, after=AFTER_FLOOR, log=print):
                     conn.rollback()
                     s["errors"] += 1
                     log(f"[ingest:{tag}] ERROR on msg {mid}: {type(e).__name__}: {e}")
-                    if "credit balance" in str(e).lower() or "rate_limit" in str(e).lower():
+                    msg_l = str(e).lower()
+                    if any(k in msg_l for k in ("credit balance", "rate_limit", "overloaded", "not supported for this model",
+                                                "thinking", "invalid model", "not_found_error")):
                         # our side (no API credits / throttled): leave the message unprocessed so
                         # it is retried next cycle, and stop burning the rest of the batch
                         s["api_blocked"] = True

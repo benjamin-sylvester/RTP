@@ -6,6 +6,7 @@
 Money returned as integer DOLLARS (converted to cents at insert time).
 """
 import json
+from ingest import model_opts
 import os
 import re
 
@@ -95,13 +96,13 @@ def _finish(resp):
 
 def ai_extract(body_text: str, source_label: str = "", model: str = None) -> dict:
     """Return {'listings': [...]} extracted from email text. Truncates very long bodies."""
-    model = model or os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
+    model = model_opts.parser_model(model)
     body = body_text[:18000]
     src = f" (sender/source: {source_label})" if source_label else ""
     prompt = PROMPT_TMPL.format(src=src, fields=LISTING_FIELDS, body=body)
     resp = _client().messages.create(
         model=model, max_tokens=3000, system=SYSTEM,
-        messages=[{"role": "user", "content": prompt}],
+        messages=[{"role": "user", "content": prompt}], **model_opts.gen_kwargs(model),
     )
     return _finish(resp)
 
@@ -110,7 +111,7 @@ def ai_extract_images(images, source_label: str = "", model: str = None) -> dict
     """Extract listings from image-based PDFs (rendered pages) via Claude vision.
     `images` = list of PNG byte strings."""
     import base64
-    model = model or os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
+    model = model_opts.parser_model(model)
     src = f" (sender/source: {source_label})" if source_label else ""
     prompt = PROMPT_TMPL.format(src=src, fields=LISTING_FIELDS,
                                body="(content is provided as the attached page images)")
@@ -121,6 +122,6 @@ def ai_extract_images(images, source_label: str = "", model: str = None) -> dict
             "data": base64.standard_b64encode(img).decode()}})
     resp = _client().messages.create(
         model=model, max_tokens=3000, system=SYSTEM,
-        messages=[{"role": "user", "content": content}],
+        messages=[{"role": "user", "content": content}], **model_opts.gen_kwargs(model),
     )
     return _finish(resp)

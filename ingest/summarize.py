@@ -3,6 +3,7 @@ Surfaces the qualitative signals the metrics miss: condition / deferred maintena
 seller motivation, below-market rents, unit-mix quality, anything notable. 2-3
 sentences, direct, no filler. The numbers are passed as context so the summary
 complements (not repeats) them."""
+from ingest import model_opts
 import os
 import re
 
@@ -57,7 +58,7 @@ def summarize(conn, svc, deal, au, model=None):
     src = _source_text(conn, svc, deal)
     if not src.strip():
         return ""  # nothing to say -> leave blank
-    model = model or os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
+    model = model_opts.classify_model(model)
     ask = f"${deal['effective_ask_cents']/100:,.0f}" if deal.get("effective_ask_cents") else "n/a"
     metrics = []
     if au.get("implied_cap_current") is not None:
@@ -69,7 +70,7 @@ def summarize(conn, svc, deal, au, model=None):
     metrics.append(f"score {au.get('score')}/{au.get('tier')}/{au.get('score_confidence')} conf")
 
     resp = _client().messages.create(
-        model=model, max_tokens=160, system=SYSTEM,
+        model=model, max_tokens=160, system=SYSTEM, **model_opts.gen_kwargs(model),
         messages=[{"role": "user", "content": PROMPT.format(
             name=deal["name"], city=deal["market"], state=deal["state"],
             units=deal["effective_units"], ask=ask,

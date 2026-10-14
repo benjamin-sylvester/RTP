@@ -19,7 +19,7 @@ Rules:
 """
 import os
 
-from ingest import gmail_client as gc, freshness
+from ingest import gmail_client as gc, freshness, model_opts
 from ingest.parsers import _client
 from ingest.reply_commands import _QUOTE
 
@@ -124,10 +124,10 @@ def infer_stage(text, model=None):
     or he's declining the deal — a reply is not automatically interest)."""
     if not (text or "").strip():
         return None
-    model = model or os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
+    model = model_opts.classify_model(model)
     resp = _client().messages.create(
-        model=model, max_tokens=8, system=SYSTEM,
-        messages=[{"role": "user", "content": PROMPT.format(src=text)}])
+        model=model, max_tokens=16, system=SYSTEM,
+        messages=[{"role": "user", "content": PROMPT.format(src=text)}], **model_opts.gen_kwargs(model))
     out = resp.content[0].text.strip().lower()
     if "pass" in out:
         return None  # declining -> leave the deal where it is (Ben can mark passed himself)
