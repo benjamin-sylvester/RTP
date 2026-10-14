@@ -299,7 +299,7 @@ def check_anthropic():
         import anthropic
         models = anthropic.Anthropic(api_key=key).models.list(limit=1)
         try:  # a 1-token request is the only real test: models.list succeeds even with no credits
-            _c.messages.create(model=os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6"), max_tokens=1,
+            anthropic.Anthropic(api_key=key).messages.create(model=os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6"), max_tokens=1,
                                messages=[{"role": "user", "content": "ok"}])
             ok("key can be billed (1-token request succeeded)")
         except Exception as _e:
@@ -312,7 +312,7 @@ def check_anthropic():
         if "authentication" in msg.lower() or "401" in msg:
             bad("API KEY INVALID OR REVOKED  <-- could also explain the outage")
         elif "credit" in msg.lower() or "quota" in msg.lower() or "429" in msg:
-            bad("OUT OF CREDIT / RATE LIMITED  <-- could also explain the outage")
+            bad("OUT OF CREDIT / RATE LIMITED  <-- the parser is failing; add credits + auto-reload at console.anthropic.com")
         else:
             bad(f"{type(e).__name__}: {msg[:200]}")
 
