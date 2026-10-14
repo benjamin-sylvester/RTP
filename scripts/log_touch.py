@@ -3,7 +3,7 @@ review and by Claude sessions; replaces editing the tracker xlsx).
 
   --who "Russell Brott" [--email russell@thebrottco.com] [--org "The Brott Company"] [--role lp_prospect]
       [--touch "Yes to the LP list" --channel linkedin --direction inbound --when 2026-10-12 --source "linkedin" --source-id "<id>"]
-      [--action "Send the overview deck" --due 2026-10-16]
+      [--action "Send the overview deck" --due 2026-10-16 --category capital --details "..."]
       [--done "<action title substring>"]        mark an open action done
       [--note "..."]                             append to the person's notes
       [--tier B] [--deal 349]                    LP tier; link the touch to a listing id
@@ -26,6 +26,7 @@ def main():
     ap.add_argument("--direction", default="mutual"); ap.add_argument("--when")
     ap.add_argument("--source"); ap.add_argument("--source-id"); ap.add_argument("--deal", type=int)
     ap.add_argument("--action"); ap.add_argument("--due"); ap.add_argument("--done")
+    ap.add_argument("--category", choices=["deal", "capital", "property", "admin", "network"]); ap.add_argument("--details")
     a = ap.parse_args()
     c = connect(autocommit=False)
     ben = c.execute("SELECT id FROM people WHERE full_name='Ben Sylvester'").fetchone()[0]
@@ -82,8 +83,10 @@ def main():
             if c.execute("SELECT 1 FROM action_items WHERE person_id=%s AND status IN ('open','waiting') AND lower(title)=lower(%s)", (pid, a.action)).fetchone():
                 print("action already open")
             else:
-                c.execute("INSERT INTO action_items (title, owner_person_id, due_on, person_id, listing_id, source) VALUES (%s,%s,%s,%s,%s,'log_touch')",
-                          (a.action, ben, a.due, pid, a.deal))
+                if len(a.action) > 70:
+                    print("warning: title over 70 characters; keep titles short and put context in --details")
+                c.execute("INSERT INTO action_items (title, details, owner_person_id, due_on, person_id, listing_id, category, source) VALUES (%s,%s,%s,%s,%s,%s,%s,'log_touch')",
+                          (a.action, a.details, ben, a.due, pid, a.deal, a.category))
                 print(f"action added for #{pid}")
         c.commit()
     finally:

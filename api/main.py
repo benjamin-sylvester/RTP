@@ -71,7 +71,7 @@ def list_deals(
     score_min: int | None = None,
     status: str | None = Query(None, description="comma list; overrides default active set"),
     comps: bool = False, needs_review: bool = False, closed: bool = False,
-    owned: bool = False, quiet: bool = False,
+    owned: bool = False, quiet: bool = False, hide_unknown: bool = True,
     sort: str = "default", order: str = "desc",
     limit: int = 200, offset: int = 0,
     _auth=Depends(require_auth),
@@ -99,6 +99,8 @@ def list_deals(
     where = ["status = ANY(%s)",
              "(%s OR status <> 'lead' OR last_seen_at > NOW() - make_interval(days => %s))"]
     params: list = [statuses, (quiet or bool(status)), freshness.active_lead_days()]
+    if hide_unknown and status != "needs_review":  # rows the parser could not place (Ben, 10/13)
+        where.append("NOT (lower(name) LIKE 'unknown%%' OR lower(name) LIKE '%%addr tbd%%' OR lower(name) LIKE '%%(address%%')")
     if tier:
         where.append("tier = %s"); params.append(tier)
     if city:
@@ -258,11 +260,89 @@ def investors(tier: str | None = None, stale_days: int | None = None, _auth=Depe
     return {"count": len(rows), "people": rows, "positions": positions, "entities": entities}
 
 
+def feed(days: int = 3, limit: int = 60):
+    """What changed: touches logged, new in-box leads, price cuts and rises on tracked deals,
+    closed sales, offer responses, documents added. One list, newest first."""
+    items = []
+    for r in db.query(
+            "SELECT i.occurred_at AS at, i.channel, i.direction, i.summary, i.listing_id, i.package_id, i.person_id, "
+            "COALESCE(p.full_name, o.name) AS who, l.address AS listing, pk.name AS package "
+            "FROM interactions i LEFT JOIN people p ON p.id=i.person_id LEFT JOIN organizations o ON o.id=i.org_id "
+            "LEFT JOIN listings l ON l.id=i.listing_id LEFT JOIN packages pk ON pk.id=i.package_id "
+            "WHERE i.occurred_at > now() - make_interval(days => %s) "
+            "AND COALESCE(i.source,'') NOT LIKE 'tracker:%%' AND COALESCE(i.source,'') <> 'call_list_seed' "  # historical imports are not news
+            "ORDER BY i.occurred_at DESC LIMIT %s", (days, limit)):
+        summary = r["summary"] or ""
+        if len(summary) > 180:
+            summary = summary[:177].rsplit(" ", 1)[0] + "..."
+        items.append({"at": r["at"], "kind": "touch", "who": r["who"], "title": summary,
+                      "sub": f"{r['channel']} {r['direction']}" + (f" · {r['listing'] or r['package']}" if (r["listing"] or r["package"]) else ""),
+                      "listing_id": r["listing_id"], "package_id": r["package_id"], "person_id": r["person_id"]})
+    for r in db.query(
+            "SELECT l.id, l.address, l.city, l.state, l.units, l.asking_price, l.price_per_unit, l.broker_name, l.date_ingested AS at "
+            "FROM listings l WHERE l.status='lead' AND l.merged_into_id IS NULL AND l.package_id IS NULL "
+            "AND l.date_ingested > now() - make_interval(days => %s) ORDER BY l.date_ingested DESC LIMIT %s", (days, limit)):
+        items.append({"at": r["at"], "kind": "lead", "who": r["broker_name"],
+                      "title": f"New lead: {r['address']}, {r['city']}",
+                      "sub": f"{r['units'] or '?'} units · {_usd(r['asking_price'])} · {_usd(r['price_per_unit'])}/unit",
+                      "listing_id": r["id"]})
+    for r in db.query(
+            "SELECT h.changed_at AS at, h.field, h.old_value, h.new_value, l.id, l.address, l.city, l.status, l.broker_name "
+            "FROM listing_history h JOIN listings l ON l.id=h.listing_id "
+            "WHERE h.changed_at > now() - make_interval(days => %s) AND h.old_value IS NOT NULL "
+            "AND ((h.field='asking_price' AND l.status IN ('lead','underwriting','loi_sent','under_contract')) "
+            "     OR h.field='sale_price' "
+            "     OR (h.field='status' AND h.new_value IN ('underwriting','loi_sent','under_contract','owned','lost'))) "
+            "ORDER BY h.changed_at DESC LIMIT %s", (days, limit)):
+        if r["field"] == "asking_price":
+            o, n = int(r["old_value"]), int(r["new_value"])
+            kind = "price_cut" if n < o else "price_rise"
+            title = f"{'Price cut' if n < o else 'Price rise'}: {r['address']}, {r['city']}"
+            sub = f"{_usd(o)} to {_usd(n)}"
+        elif r["field"] == "sale_price":
+            kind, title, sub = "sold", f"Sold: {r['address']}, {r['city']}", f"{_usd(int(r['new_value']))} executed"
+        else:
+            kind, title, sub = "status", f"{r['address']}, {r['city']} moved to {r['new_value'].replace('_', ' ')}", f"from {r['old_value']}"
+        items.append({"at": r["at"], "kind": kind, "who": r["broker_name"], "title": title, "sub": sub, "listing_id": r["id"]})
+    for r in db.query(
+            "SELECT o.id, o.offer_type, o.direction, o.price_cents, o.response, o.response_date, o.created_at, o.offer_date, "
+            "o.listing_id, o.package_id, COALESCE(l.address, pk.name) AS name, p.full_name AS who "
+            "FROM offers o LEFT JOIN listings l ON l.id=o.listing_id LEFT JOIN packages pk ON pk.id=o.package_id "
+            "LEFT JOIN people p ON p.id=o.sent_to_person_id "
+            "WHERE o.created_at > now() - make_interval(days => %s) OR o.response_date > CURRENT_DATE - %s "
+            "ORDER BY o.updated_at DESC LIMIT %s", (days, days, limit)):
+        if r["response"] != "pending" and r["response_date"]:
+            items.append({"at": r["response_date"], "kind": "offer", "who": r["who"],
+                          "title": f"Offer {r['response']}: {r['name']}", "sub": f"{r['offer_type']} {_usd(r['price_cents'])}",
+                          "listing_id": r["listing_id"], "package_id": r["package_id"]})
+        else:
+            items.append({"at": r["created_at"], "kind": "offer", "who": r["who"],
+                          "title": f"Offer logged: {r['name']}", "sub": f"{r['offer_type']} {_usd(r['price_cents'])} · {r['response']}",
+                          "listing_id": r["listing_id"], "package_id": r["package_id"]})
+    for r in db.query(
+            "SELECT d.created_at AS at, d.title, d.doc_type, d.listing_id, d.package_id, d.person_id "
+            "FROM documents d WHERE d.created_at > now() - make_interval(days => %s) ORDER BY d.created_at DESC LIMIT %s", (days, limit)):
+        items.append({"at": r["at"], "kind": "document", "who": None, "title": f"Document: {r['title']}", "sub": r["doc_type"],
+                      "listing_id": r["listing_id"], "package_id": r["package_id"], "person_id": r["person_id"]})
+    items.sort(key=lambda x: str(x["at"]), reverse=True)
+    return items[:limit]
+
+
+def _usd(cents):
+    return f"${cents/100:,.0f}" if cents is not None else "n/a"
+
+
+@app.get("/api/feed")
+def feed_endpoint(days: int = 3, _auth=Depends(require_auth)):
+    return {"days": days, "items": feed(days)}
+
+
 @app.get("/api/inbox")
 def inbox(_auth=Depends(require_auth)):
     """Everything waiting for a human: review queue, jobs that did not run, offers past their
     acceptance date, action items due soon, needs_review listings."""
     return {
+        "feed": feed(3),
         "jobs_missing": db.query("SELECT job, expected_every::text, last_ok, last_status FROM v_jobs_missing"),
         "job_runs": db.query("SELECT job, started_at, finished_at, status, counts FROM job_runs ORDER BY started_at DESC LIMIT 20"),
         "review": db.query("SELECT id, kind, ref_table, ref_id, payload, created_at FROM review_queue WHERE status='open' ORDER BY created_at DESC"),
