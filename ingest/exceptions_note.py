@@ -17,6 +17,8 @@ def gather(conn):
     q = lambda sql, *p: conn.execute(sql, p).fetchall()
     d = {}
     d["jobs_missing"] = q("SELECT job, expected_every::text, last_ok, last_status FROM v_jobs_missing WHERE job <> 'tracker_export'")
+    d["ingest_errors"] = q("SELECT coalesce(sum((counts->>'errors')::int),0), max(message) FILTER (WHERE status='error') "
+                           "FROM job_runs WHERE job='ingest' AND started_at > now() - interval '24 hours'")[0]
     d["review"] = q("SELECT kind, count(*) FROM review_queue WHERE status='open' GROUP BY 1 ORDER BY 2 DESC")
     d["needs_review"] = q("SELECT count(*) FROM listings WHERE status='needs_review'")[0][0]
     d["offers_overdue"] = q(
@@ -37,7 +39,8 @@ def gather(conn):
 
 
 def needs_attention(d):
-    return bool(d["jobs_missing"] or d["review"] or d["needs_review"] or d["offers_overdue"] or d["actions_due"] or d["new_leads"])
+    return bool(d["jobs_missing"] or d["review"] or d["needs_review"] or d["offers_overdue"] or d["actions_due"] or d["new_leads"]
+                or (d["ingest_errors"] and d["ingest_errors"][0]))
 
 
 def render(d):
@@ -46,6 +49,10 @@ def render(d):
     parts = ["<div style='font:14px/1.5 Inter,Arial,sans-serif;color:#14202e;max-width:640px'>"]
     n, leads, sold = d["ingest_24h"]
     parts.append(f"<p style='color:#6B7280'>Logged in the last 24h: {n} listings ({leads} leads, {sold} sales). Nothing below needs you unless listed.</p>")
+    if d["ingest_errors"] and d["ingest_errors"][0]:
+        n_err, msg = d["ingest_errors"]
+        parts.append(f"<h3 style='color:#b0503f'>Inbox scanner: {n_err} message(s) failed to parse in the last 24h</h3>"
+                     f"<p>{e(msg or 'See railway logs --service RTP-INGEST')}. Messages failed on our side are retried automatically once the API is back.</p>")
     if d["jobs_missing"]:
         parts.append("<h3 style='color:#b0503f'>Jobs that did not run</h3><ul>")
         for job, every, last_ok, last_status in d["jobs_missing"]:
@@ -93,4 +100,5 @@ def run(conn, svc=None, send=False, to=None, preview_path=None):
         to = to or os.environ.get("DISPATCH_EMAIL")
         sent_id = gc.send_html(svc, to, subject, body)
     return {"subject": subject, "attention": attention, "sent_id": sent_id,
-            "counts": {k: (len(v) if isinstance(v, list) else v) for k, v in d.items() if k != "ingest_24h"}}
+            "counts": {k: (len(v) if isinstance(v, list) else v) for k, v in d.items() if k not in ("ingest_24h", "ingest_errors")}
+                      | {"ingest_errors_24h": d["ingest_errors"][0] if d["ingest_errors"] else 0}}

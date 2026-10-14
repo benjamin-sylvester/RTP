@@ -344,6 +344,10 @@ def inbox(_auth=Depends(require_auth)):
     return {
         "feed": feed(3),
         "jobs_missing": db.query("SELECT job, expected_every::text, last_ok, last_status FROM v_jobs_missing"),
+        "ingest_24h": db.one("SELECT count(*) AS runs, coalesce(sum((counts->>'messages')::int),0) AS messages, "
+                             "coalesce(sum((counts->>'inserted')::int),0) AS inserted, coalesce(sum((counts->>'enriched')::int),0) AS enriched, "
+                             "coalesce(sum((counts->>'errors')::int),0) AS errors, max(message) FILTER (WHERE status='error') AS last_error "
+                             "FROM job_runs WHERE job='ingest' AND started_at > now() - interval '24 hours'"),
         "job_runs": db.query("SELECT job, started_at, finished_at, status, counts FROM job_runs ORDER BY started_at DESC LIMIT 20"),
         "review": db.query("SELECT id, kind, ref_table, ref_id, payload, created_at FROM review_queue WHERE status='open' ORDER BY created_at DESC"),
         "needs_review": db.query("SELECT id, address, city, state, units, asking_price, source, date_ingested "

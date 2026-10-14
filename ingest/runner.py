@@ -132,6 +132,12 @@ def run_once(commit=True, after=AFTER_FLOOR, log=print):
                     conn.rollback()
                     s["errors"] += 1
                     log(f"[ingest:{tag}] ERROR on msg {mid}: {type(e).__name__}: {e}")
+                    if "credit balance" in str(e).lower() or "rate_limit" in str(e).lower():
+                        # our side (no API credits / throttled): leave the message unprocessed so
+                        # it is retried next cycle, and stop burning the rest of the batch
+                        s["api_blocked"] = True
+                        log(f"[ingest:{tag}] API unavailable; leaving {mid} and the rest of this batch for the next cycle")
+                        break
                     if commit:
                         try:
                             mark_processed(conn, tag, mid, f"error:{type(e).__name__}")
@@ -142,8 +148,9 @@ def run_once(commit=True, after=AFTER_FLOOR, log=print):
         if run_id:
             try:
                 import json
-                conn.execute("UPDATE job_runs SET finished_at=now(), status=%s, counts=%s::jsonb WHERE id=%s",
-                             ("warn" if s["errors"] else "ok", json.dumps(s), run_id))
+                conn.execute("UPDATE job_runs SET finished_at=now(), status=%s, counts=%s::jsonb, message=%s WHERE id=%s",
+                             ("error" if s.get("api_blocked") else "warn" if s["errors"] else "ok", json.dumps(s),
+                              "Anthropic API unavailable (credits or rate limit); messages left for retry" if s.get("api_blocked") else None, run_id))
                 conn.commit()
             except Exception as e:
                 conn.rollback(); log(f"[ingest] job_runs update failed: {e}")

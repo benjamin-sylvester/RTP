@@ -298,6 +298,13 @@ def check_anthropic():
     try:
         import anthropic
         models = anthropic.Anthropic(api_key=key).models.list(limit=1)
+        try:  # a 1-token request is the only real test: models.list succeeds even with no credits
+            _c.messages.create(model=os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6"), max_tokens=1,
+                               messages=[{"role": "user", "content": "ok"}])
+            ok("key can be billed (1-token request succeeded)")
+        except Exception as _e:
+            bad(f"key accepted but requests FAIL: {str(_e)[:160]}")
+            bad("-> add credits / auto-reload at console.anthropic.com for the org that owns this key")
         ok(f"key valid (models.list returned {len(models.data)})")
         info(f"configured model: {os.environ.get('CLAUDE_MODEL', 'unset')}")
     except Exception as e:

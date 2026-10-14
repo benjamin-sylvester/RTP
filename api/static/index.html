@@ -651,7 +651,10 @@ async function loadInbox(){
     // attention
     const attention=d.jobs_missing.length+d.offers_overdue.length+d.review.length+d.needs_review.length;
     const row=(k,v)=>`<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`;
-    const jobs=d.jobs_missing.length?d.jobs_missing.map(j=>row(`<span class="bad">${esc(j.job)}</span>`,j.last_ok?'last ok '+esc(j.last_ok.slice(5,16).replace('T',' ')):'never ran')).join(''):row('<span class="ok">All jobs on schedule</span>','');
+    const ig=d.ingest_24h||{};
+    const jobs=(d.jobs_missing.length?d.jobs_missing.map(j=>row(`<span class="bad">${esc(j.job)}</span>`,j.last_ok?'last ok '+esc(j.last_ok.slice(5,16).replace('T',' ')):'never ran')).join(''):row('<span class="ok">All jobs on schedule</span>',''))
+      +row(`Inbox scanner, 24h${ig.errors?` <span class="bad">· ${ig.errors} failed</span>`:''}`,`${ig.runs||0} runs · ${ig.messages||0} msgs · ${ig.inserted||0} new · ${ig.enriched||0} updated`)
+      +(ig.last_error?row(`<span class="bad">${esc(ig.last_error)}</span>`,''):'');
     const offers=d.offers_overdue.length?d.offers_overdue.map(o=>row(`<a href="#" onclick="openDeal('${o.listing_id?'listing':'package'}',${o.listing_id||o.package_id});return false">${esc(o.name)}</a>`,`${esc(o.offer_type)} ${dt(o.offer_date).slice(5)} · ${money(o.price_cents)}${o.acceptance_date&&o.acceptance_date<today?' · <span class="bad">past '+esc(o.acceptance_date.slice(5))+'</span>':''}`)).join(''):row('<span class="mut">No pending offers</span>','');
     const review=[...d.review.map(r=>row(esc(r.kind.replace(/_/g,' '))+(r.payload&&r.payload.person?` <span class="mut">· ${esc(r.payload.person)}</span>`:''),`<span class="acts"><button onclick="resolveReview(${r.id},'resolved')">resolved</button><button onclick="resolveReview(${r.id},'dismissed')">dismiss</button></span>`)),
       ...d.needs_review.map(l=>row(`<a href="#" onclick="openDeal('listing',${l.id});return false">${esc(l.address)}, ${esc(l.city)}</a>`,`${l.units||'?'}u · ${money(l.asking_price)}`))].join('')||row('<span class="mut">Queue is empty</span>','');
