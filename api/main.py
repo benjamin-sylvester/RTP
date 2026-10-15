@@ -439,3 +439,114 @@ def set_deal_status(kind: str, deal_id: int, payload: dict = Body(...),
     if not res:
         raise HTTPException(404, "deal not found")
     return res
+
+
+@app.get("/api/origination")
+def origination(
+    corridor: str | None = None,
+    tier: str | None = None,
+    status: str | None = None,
+    city: str | None = None,
+    sort: str = "tier_score",
+    limit: int = 500,
+    _auth=Depends(require_auth),
+):
+    """Owner origination list sorted by tier and score.
+    Filters: corridor (C1=I-93, C2=Strafford County), tier (T1-T4),
+    call_status (Sell now, Sell later, Maybe / warm, Not selling, No answer, Wrong number),
+    city. Returns owners with their properties, last contact, and next follow-up date."""
+
+    where = ["1=1"]
+    params: list = []
+
+    if corridor:
+        # This would require a corridor column or logic; for now, map cities
+        city_map = {
+            "C1": ("manchester", "nashua", "derry", "londonderry", "salem"),
+            "C2": ("dover", "rochester", "somersworth", "farmington"),
+        }
+        if corridor in city_map:
+            cities = city_map[corridor]
+            placeholders = ",".join(["%s"] * len(cities))
+            where.append(f"lower(properties_cities) ~ ANY(ARRAY[{placeholders}])")
+            params.extend(cities)
+
+    if tier:
+        where.append("owner_tier = %s")
+        params.append(tier)
+
+    if status:
+        where.append("call_status = %s")
+        params.append(status)
+
+    if city:
+        where.append("lower(properties_cities) LIKE %s")
+        params.append(f"%{city.lower()}%")
+
+    if sort == "tier_score":
+        order_by = "owner_tier, owner_score DESC NULLS LAST"
+    elif sort == "last_contact":
+        order_by = "last_contact_date DESC NULLS LAST"
+    else:
+        order_by = "owner_tier, owner_score DESC NULLS LAST"
+
+    sql = f"SELECT * FROM v_owner_calls WHERE {' AND '.join(where)} ORDER BY {order_by} LIMIT %s"
+    params.append(min(limit, 500))
+
+    rows = db.query(sql, params)
+    return {
+        "count": len(rows),
+        "filters": {"corridor": corridor, "tier": tier, "status": status, "city": city},
+        "owners": rows
+    }
+
+
+@app.post("/api/origination/log-call")
+def log_call(payload: dict = Body(...), _auth=Depends(require_auth)):
+    """Log a call outcome for an owner.
+    Payload: {person_id, outcome (Sell now/Sell later/Maybe / warm/Not selling/No answer/Wrong number), notes}
+    """
+    person_id = payload.get("person_id")
+    outcome = payload.get("outcome")
+    notes = (payload.get("notes") or "").strip()
+
+    if not person_id or not outcome:
+        raise HTTPException(400, "person_id and outcome are required")
+
+    if outcome not in ("Sell now", "Sell later", "Maybe / warm", "Not selling", "No answer", "Wrong number"):
+        raise HTTPException(400, f"invalid outcome: {outcome}")
+
+    summary = f"Cold call outcome: {outcome}"
+    if notes:
+        summary += f". {notes}"
+
+    # Get the authenticated user (for now, assume Ben or Ren based on IP/context)
+    # For now, default to Ben; this should be wired to actual auth
+    by_person_id = db.one("SELECT id FROM people WHERE full_name='Ben Sylvester'")["id"]
+
+    # Find the owner person and property (for context)
+    owner = db.one("SELECT org_id FROM people WHERE id=%s", (person_id,))
+
+    with db.connect() as conn:
+        # Insert the interaction
+        conn.execute(
+            "INSERT INTO interactions (person_id, org_id, channel, direction, occurred_at, summary, by_person_id, source, source_id) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (person_id, owner.get("org_id") if owner else None, "call", "outbound",
+             "now()", summary, by_person_id, "origination_tab", f"owner_{person_id}")
+        )
+
+        # If warm outcome, create an action item for follow-up (7 days from now)
+        if outcome in ("Sell now", "Sell later", "Maybe / warm"):
+            person_name = db.one("SELECT full_name FROM people WHERE id=%s", (person_id,))
+            conn.execute(
+                "INSERT INTO action_items (person_id, category, title, details, due_on, status, owner_person_id, source) "
+                "VALUES (%s, %s, %s, %s, NOW()::date + interval '7 days', %s, %s, %s) "
+                "ON CONFLICT DO NOTHING",
+                (person_id, "deal", f"Follow up with {person_name.get('full_name')} on deal",
+                 f"Last contact: {outcome}", "open", by_person_id, "origination_tab")
+            )
+
+        conn.commit()
+
+    return {"ok": True, "person_id": person_id, "outcome": outcome}

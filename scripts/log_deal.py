@@ -74,8 +74,8 @@ def main():
                  (ask_c // a.units) if (ask_c and a.units) else None, a.year_built, status,
                  a.source, a.broker, a.broker_email, a.notes, a.drive_folder, a.boe_url)).fetchone()[0]
             conn.execute(
-                "INSERT INTO listing_history (listing_id, field, old_value, new_value, changed_at, source) "
-                "VALUES (%s,'status',NULL,%s,NOW(),'log_deal.py')", (lid, status))
+                "INSERT INTO listing_history (listing_id, field, old_value, new_value, changed_at) "
+                "VALUES (%s,'status',NULL,%s,NOW())", (lid, status))
             conn.commit()
             print(f"inserted #{lid} -> {status} ({reasons[0]})")
             return

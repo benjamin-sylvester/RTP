@@ -204,6 +204,28 @@ tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
 #login button{padding:9px;border:0;border-radius:8px;background:var(--brand);color:#fff;font-weight:600;cursor:pointer} #login .err{color:var(--st-lost);font-size:12px;min-height:14px}
 #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:9px 15px;border-radius:9px;font-size:13px;opacity:0;transition:.2s;pointer-events:none;z-index:50}
 [hidden]{display:none!important}
+/* modals + forms */
+.modal{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center}
+.modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.5);cursor:pointer}
+.modal-content{position:relative;z-index:1;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:90%;max-width:400px;padding:22px;display:flex;flex-direction:column;gap:16px}
+.modal-header{display:flex;align-items:center;justify-content:space-between;gap:12px} .modal-header h3{margin:0;font-size:16px}
+.modal-close{border:0;background:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0;width:28px;height:28px;display:flex;align-items:center;justify-content:center}
+.modal-close:hover{color:var(--ink)} .form-group{display:flex;flex-direction:column;gap:5px}
+.form-group label{font-size:13px;font-weight:500;color:var(--ink)} .form-group input,.form-group textarea,.form-group select{font:13px var(--font-sans);padding:8px 10px;border:1px solid var(--line-2);border-radius:7px;background:var(--surface);color:var(--ink)}
+.form-group textarea{font-family:var(--font-sans);resize:vertical;min-height:80px} .modal-footer{display:flex;gap:8px;justify-content:flex-end}
+.modal-footer button{font-size:13px;padding:7px 14px;border:1px solid var(--line-2);border-radius:8px;background:var(--surface);color:var(--ink);cursor:pointer}
+.modal-footer button:hover{background:var(--surface-2);border-color:var(--brand)} .modal-footer button[type=submit]{background:var(--brand);color:#fff;border-color:var(--brand)}
+/* warm leads */
+.warm-leads{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+.warmhead{font-weight:600;color:var(--accent);margin-bottom:10px;font-size:13px}
+.warm-item{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);font-size:13px}
+.warm-item:last-child{border-bottom:0} .warm-item>div:first-child{flex:1;min-width:0}
+.warm-actions{display:flex;gap:6px;white-space:nowrap} .warm-actions a,.warm-actions button{font-size:11px;padding:4px 8px;border:1px solid var(--line-2);background:var(--surface-2);color:var(--ink-2);text-decoration:none;border-radius:6px;cursor:pointer}
+.warm-actions a:hover,.warm-actions button:hover{border-color:var(--brand);color:var(--brand)}
+/* table + misc */
+button.mini{font-size:11px;padding:3px 8px;border:1px solid var(--line-2);background:var(--surface-2);color:var(--ink-2);border-radius:5px;cursor:pointer}
+button.mini:hover{border-color:var(--brand);color:var(--brand)}
+.warmhighlight{background:color-mix(in srgb,var(--accent) 8%,transparent) !important}
 </style>
 </head>
 <body>
@@ -215,6 +237,7 @@ tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
     <button class="tab" role="tab" data-panel="deals" aria-selected="false">Database</button>
     <button class="tab" role="tab" data-panel="map" aria-selected="false">Map</button>
     <button class="tab" role="tab" data-panel="stats" aria-selected="false">Analytics</button>
+    <button class="tab" role="tab" data-panel="origination" aria-selected="false">Origination</button>
     <button class="tab" role="tab" data-panel="investors" aria-selected="false">Investors</button>
   </nav>
   <button class="iconbtn" id="theme" title="Toggle theme">◐</button>
@@ -260,6 +283,19 @@ tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
       <div class="chartcard"><h3>Deal flow over time</h3><div class="sub">Properties ingested per month</div><div class="plot" id="timeline"></div></div>
       <div class="chartcard"><h3>$/unit distribution</h3><div class="sub">Pricing landscape of the current slice</div><div class="plot" id="ppuHist"></div></div>
     </div>
+  </section>
+
+  <!-- ORIGINATION -->
+  <section class="panel" id="origination">
+    <div class="section-head"><div><div class="eyebrow">Off-market owner calls · cold outreach</div><h2>Origination</h2></div><div class="note" id="org-note"></div></div>
+    <div class="filters">
+      <label>Corridor<select id="org-corridor"><option value="">any</option><option>C1 (I-93)</option><option>C2 (Strafford)</option></select></label>
+      <label>Tier<select id="org-tier"><option value="">any</option><option>T1</option><option>T2</option><option>T3</option><option>T4</option></select></label>
+      <label>Status<select id="org-status"><option value="">any</option><option>Sell now</option><option>Sell later</option><option>Maybe / warm</option><option>Not selling</option><option>No answer</option><option>Wrong number</option></select></label>
+      <label>City<input id="org-city" placeholder="Manchester"></label>
+    </div>
+    <div id="org-warm" style="margin-bottom:20px"></div>
+    <div class="tablecard"><div class="tscroll"><table><thead><tr><th>Tier</th><th>Score</th><th>Name</th><th>Phone</th><th>Properties</th><th>Last Contact</th><th>Status</th><th>Next Follow-up</th><th>Action</th></tr></thead><tbody id="org-body"></tbody></table></div></div>
   </section>
 
   <!-- INVESTORS -->
@@ -317,7 +353,7 @@ function show(id,fromTab){
   panels.forEach(p=>p.classList.toggle('on',p.id===id));
   if(fromTab!==false) tabs.forEach(t=>t.setAttribute('aria-selected',t.dataset.panel===id));
   try{if(id!=='detailpanel')localStorage.setItem('rtp_tab',id)}catch(e){}
-  if(id==='live')loadLive(); if(id==='deals')loadDeals(); if(id==='map')loadMap(); if(id==='stats')loadStats(); if(id==='investors')loadInvestors(); if(id==='inbox')loadInbox();
+  if(id==='live')loadLive(); if(id==='deals')loadDeals(); if(id==='map')loadMap(); if(id==='stats')loadStats(); if(id==='origination')loadOrigination(); if(id==='investors')loadInvestors(); if(id==='inbox')loadInbox();
 }
 tabs.forEach(t=>t.onclick=()=>show(t.dataset.panel));
 
@@ -590,6 +626,32 @@ function renderDetail(d,c){
       <div class="card wide"><h3>Documents</h3>${docsHtml}</div>
       <div class="card wide"><h3>Links</h3>${linksHtml}</div></div>`;
 }
+
+/* origination */
+async function loadOrigination(){
+  const corridor=document.getElementById('org-corridor').value||'',tier=document.getElementById('org-tier').value||'',status=document.getElementById('org-status').value||'',city=document.getElementById('org-city').value||'';
+  const qs=new URLSearchParams();if(corridor)qs.set('corridor',corridor.startsWith('C1')?'C1':'C2');if(tier)qs.set('tier',tier);if(status)qs.set('status',status);if(city)qs.set('city',city);
+  try{const d=await(await api('/api/origination?'+qs)).json();
+    const owners=d.owners||[];document.getElementById('org-note').textContent=`${owners.length} owner${owners.length!==1?'s':''}`;
+    const warm=owners.filter(o=>['Sell now','Sell later','Maybe / warm'].includes(o.call_status));
+    document.getElementById('org-warm').innerHTML=warm.length?`<div class="warm-leads"><div class="warmhead">Warm Leads (${warm.length})</div>${warm.map(o=>`<div class="warm-item"><div><b>${esc(o.owner_name)}</b> · ${esc(o.phone||'—')} · ${esc((o.properties_cities||'—').split(',')[0])}</div><div class="warm-actions"><a href="tel:${o.phone}" onclick="event.stopPropagation()">📞 call</a><button onclick="showOutcomeForm(${o.person_id})">log outcome</button></div></div>`).join('')}</div>`:''
+    document.getElementById('org-body').innerHTML=owners.map(o=>{
+      const warmBg=warm.some(w=>w.person_id===o.person_id)?' style="background:var(--warmhighlight)"':'';
+      return `<tr${warmBg}><td><b>${esc(o.owner_tier||'—')}</b></td><td class="num">${o.owner_score||'—'}</td><td><b>${esc(o.owner_name)}</b></td><td class="mono"><a href="tel:${o.phone}">${esc(o.phone||'—')}</a></td><td>${esc((o.properties_cities||'—').split(',').slice(0,2).join(', '))}</td><td class="mono">${dt(o.last_contact_date)}</td><td>${esc(o.call_status||'—')}</td><td class="mono">${dt(o.next_followup_date)}</td><td><button class="mini" onclick="showOutcomeForm(${o.person_id})">log</button></td></tr>`;
+    }).join('')||'<tr><td colspan="9" class="mut">No owners match the filters.</td></tr>';
+  }catch(e){console.error(e);}
+}
+function showOutcomeForm(personId){
+  const modal=document.createElement('div');modal.className='modal';modal.id='outcomeModal';
+  modal.innerHTML=`<div class="modal-backdrop" onclick="closeModal('outcomeModal')"></div><div class="modal-content"><div class="modal-header"><h3>Log Call Outcome</h3><button class="modal-close" onclick="closeModal('outcomeModal')">✕</button></div><form onsubmit="submitOutcome(event,${personId})"><div class="form-group"><label>Outcome<select id="outcomeSelect" required><option value="">Choose outcome...</option><option>Sell now</option><option>Sell later</option><option>Maybe / warm</option><option>Not selling</option><option>No answer</option><option>Wrong number</option></select></label></div><div class="form-group"><label>Notes<textarea id="outcomeNotes" placeholder="Optional notes..."></textarea></label></div><div class="modal-footer"><button type="button" onclick="closeModal('outcomeModal')">Cancel</button><button type="submit">Log Outcome</button></div></form></div>`;
+  document.body.appendChild(modal);document.getElementById('outcomeSelect').focus();
+}
+function closeModal(id){const m=document.getElementById(id);if(m)m.remove();}
+async function submitOutcome(e,personId){e.preventDefault();const outcome=document.getElementById('outcomeSelect').value,notes=document.getElementById('outcomeNotes').value;
+  try{const r=await api('/api/origination/log-call',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({person_id:personId,outcome,notes})});
+    if(r.ok){closeModal('outcomeModal');toast('Outcome logged');loadOrigination();}else toast('Failed to log outcome');}catch(e){toast('Error: '+e.message);}
+}
+['org-corridor','org-tier','org-status','org-city'].forEach(id=>document.getElementById(id).addEventListener('change',loadOrigination));
 
 /* investors */
 const esc=x=>String(x??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
