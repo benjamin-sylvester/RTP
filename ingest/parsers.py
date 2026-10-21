@@ -41,11 +41,14 @@ Rules:
 - If the email contains NO actual property listing (event/meetup invite, newsletter
   chatter, pure notification with no deal), return {{"listings": []}}.
 - Set any unavailable field to null. Money as plain integers in DOLLARS (no symbols/commas).
-- listing_status: "sold" for closing / "just sold" / "just closed" announcements,
-  "under_agreement" for under-agreement / pending notices, otherwise "for_sale".
-  For a sold deal put the CLOSED price in sale_price (and the closing date in sale_date
-  if stated); set asking_price ONLY if the original list price is also stated. Never put
-  a sale price in asking_price.
+- listing_status: "sold" when the property has already CLOSED or been SOLD. Look for phrases like:
+  "Closing Announcement", "Just Closed", "Just Sold", "Successfully Closed", "Sold For",
+  "Has Sold", "Now Closed", a "CLOSED" badge, or a closing date in the subject/header.
+  "under_agreement" for under-agreement / pending / contingent notices.
+  Otherwise default to "for_sale".
+  For a sold deal: put the CLOSED/EXECUTED price in sale_price, the closing date in sale_date
+  (if stated), and leave asking_price null UNLESS the original list price is also shown.
+  Never put a sale price in asking_price.
 - Several buildings sold or listed together as ONE deal with ONE price -> ONE element:
   the first street address in address, the other street addresses in other_addresses,
   the combined unit count in units.
