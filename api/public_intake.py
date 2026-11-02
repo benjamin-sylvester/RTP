@@ -16,10 +16,13 @@ router = APIRouter(prefix="/api/public")
 _EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,255}\.[^@\s]{2,}$")
 _CTRL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
 ABOUT = {
-    "current_investor": "existing RTP investor",
-    "exploring": "individual investor exploring",
+    "individual": "individual investor",
     "family_office": "family office or fund",
+    "advisor": "financial advisor or referral source",
     "other": "other",
+    # retired 11/2/26, kept so an old cached page still maps
+    "current_investor": "existing RTP investor",
+    "exploring": "individual investor",
 }
 RANGE = {
     "not_sure": "not sure yet",
@@ -141,12 +144,11 @@ def investor(payload: dict = Body(...), x_intake_secret: str | None = Header(Non
                  f"Email: {email}. " + (f"Phone: {phone}. " if phone else "") + f"About: {about}. Range: {check}. Heard via: {heard}. "
                  + (f"Note: {message[:400]}" if message else ""), ben))
 
-        # newsletter only if they ticked the box
-        if payload.get("newsletter"):
-            conn.execute(
-                "INSERT INTO newsletter_subscribers (email, person_id, source, consent_text) "
-                "VALUES (%s, %s, 'website_investor', 'Ticked newsletter box on investor form') "
-                "ON CONFLICT (email) DO UPDATE SET unsubscribed_at = NULL, "
-                "person_id = COALESCE(newsletter_subscribers.person_id, EXCLUDED.person_id)", (email, pid))
+        # everyone gets the newsletter; the form says so. Re-submitting does not undo an unsubscribe
+        conn.execute(
+            "INSERT INTO newsletter_subscribers (email, person_id, source, consent_text) "
+            "VALUES (%s, %s, 'website_investor', 'Investor form, told they will get updates') "
+            "ON CONFLICT (email) DO UPDATE SET "
+            "person_id = COALESCE(newsletter_subscribers.person_id, EXCLUDED.person_id)", (email, pid))
         conn.commit()
     return {"ok": True}

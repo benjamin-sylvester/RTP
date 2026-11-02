@@ -164,7 +164,7 @@ Signups from the rtprei.com footer box (and the "also send me the newsletter" ti
 | subscribed_at | timestamptz NN | |
 | unsubscribed_at | timestamptz | null = active; resubscribing clears it |
 | unsubscribe_token | uuid NN | for the unsubscribe link when sending starts |
-View `v_newsletter_active` lists active subscribers.
+View `v_newsletter_active` lists active subscribers. View `v_newsletter_audience` (migration 025) is the send list: every person with an email (except internal) plus every active subscriber, one row per email, minus anyone who unsubscribed; `via` says where the address came from. Deals for a raise go to the LP list (`v_lp_pipeline`), not this one.
 
 Investor-interest submissions from the same site use existing tables: a `people` row (roles `lp_prospect`, `lp_tier` null = not yet tiered, source `website`) plus `people_emails`, an inbound `interactions` row (source `website_investor`) and an open `action_items` row (category capital, due next day). A known email is matched, not duplicated, and keeps its roles and tier. Endpoints: `POST /api/public/investor` and `/api/public/newsletter` (`api/public_intake.py`), guarded by the `INTAKE_SECRET` header, not the dashboard login.
 
