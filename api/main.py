@@ -11,6 +11,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from api import db
 from api.auth import check_password, require_auth
+from api.public_intake import router as public_intake_router
 from ingest import freshness
 from ingest.gmail_client import _load_env
 
@@ -22,6 +23,7 @@ app.add_middleware(
     same_site="lax",
     https_only=os.environ.get("DASHBOARD_HTTPS", "").lower() in ("1", "true"),
 )
+app.include_router(public_intake_router)  # rtprei.com forms; shared-secret header, not the dashboard login
 
 
 @app.post("/api/login")

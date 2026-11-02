@@ -152,6 +152,22 @@ Replaces the tracker's Next actions tab and feeds every "to do" view.
 | source, source_id | text | |
 | created_at, completed_at | timestamptz | |
 
+### newsletter_subscribers [web intake, migration 024]
+Signups from the rtprei.com footer box (and the "also send me the newsletter" tick on the investor form). A subscriber is not necessarily a tracked person, so this is its own table.
+| column | type | notes |
+|---|---|---|
+| id | serial PK | |
+| email | citext NN UQ | |
+| person_id | FK people | set when the email matches a known person |
+| source | text NN | website, website_investor |
+| consent_text | text | what the visitor agreed to |
+| subscribed_at | timestamptz NN | |
+| unsubscribed_at | timestamptz | null = active; resubscribing clears it |
+| unsubscribe_token | uuid NN | for the unsubscribe link when sending starts |
+View `v_newsletter_active` lists active subscribers.
+
+Investor-interest submissions from the same site use existing tables: a `people` row (roles `lp_prospect`, `lp_tier` null = not yet tiered, source `website`) plus `people_emails`, an inbound `interactions` row (source `website_investor`) and an open `action_items` row (category capital, due next day). A known email is matched, not duplicated, and keeps its roles and tier. Endpoints: `POST /api/public/investor` and `/api/public/newsletter` (`api/public_intake.py`), guarded by the `INTAKE_SECRET` header, not the dashboard login.
+
 ### documents [P1]
 The pointer layer between the database and Drive.
 | column | type | notes |
