@@ -2,12 +2,15 @@
 Not behind the dashboard login. Instead every call must carry the shared secret in the
 X-Intake-Secret header (INTAKE_SECRET), which only the Cloudflare Pages Function on rtprei.com
 knows. If INTAKE_SECRET is unset the endpoints are off. Responses never say whether an email
-already exists."""
+already exists.
+Each real submission also emails Ben an alert (INTAKE_ALERT_TO, else DISPATCH_EMAIL) through the
+shared Gmail client, after the response is sent. No Gmail settings = no alert, form still works."""
 import hmac
+import html
 import os
 import re
 
-from fastapi import APIRouter, Body, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Body, Header, HTTPException
 
 from api import db
 
@@ -53,6 +56,39 @@ def _clean(v, n):
     return _CTRL.sub("", (v or "")).strip()[:n]
 
 
+def _line(v, n):
+    """Single-line value (names, phone): no newlines, so it is safe in an email subject."""
+    return " ".join(_clean(v, n).split())
+
+
+def _alert(subject, rows, note=""):
+    """Email Ben a short table. Runs as a background task; never raises."""
+    to = os.environ.get("INTAKE_ALERT_TO") or os.environ.get("DISPATCH_EMAIL")
+    if not to or not os.environ.get("GMAIL_REFRESH_TOKEN"):
+        return
+    try:
+        from ingest import gmail_client as gc
+        body = "".join(f"<tr><td style='padding:2px 12px 2px 0;color:#6B7280'>{html.escape(k)}</td>"
+                       f"<td>{html.escape(v)}</td></tr>" for k, v in rows if v)
+        page = f"<table style='font-family:Arial,sans-serif;font-size:14px'>{body}</table>"
+        if note:
+            page += f"<p style='font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap'>{html.escape(note)}</p>"
+        text = "\n".join(f"{k}: {v}" for k, v in rows if v) + (f"\n\n{note}" if note else "")
+        gc.send_html(gc.service(), to, subject, page, text)
+    except Exception as e:  # an alert failure must not affect the submission
+        print(f"[intake] alert failed: {e}")
+
+
+def _known(conn, pid):
+    if pid is None:
+        return ""
+    r = conn.execute("SELECT full_name, roles, lp_tier FROM people WHERE id=%s", (pid,)).fetchone()
+    if not r:
+        return ""
+    tier = f", tier {r['lp_tier']}" if r["lp_tier"] else ""
+    return f"Yes: {r['full_name']} ({', '.join(r['roles'] or []) or 'no role'}{tier})"
+
+
 def _email(v):
     e = _clean(v, 320).lower()
     if not _EMAIL.match(e):
@@ -73,34 +109,38 @@ def _person_by_email(conn, email):
 
 
 @router.post("/newsletter")
-def newsletter(payload: dict = Body(...), x_intake_secret: str | None = Header(None)):
+def newsletter(tasks: BackgroundTasks, payload: dict = Body(...), x_intake_secret: str | None = Header(None)):
     _check_secret(x_intake_secret)
     if _clean(payload.get("website"), 50):  # honeypot: bots fill it
         return {"ok": True}
     email = _email(payload.get("email"))
     with db.connect() as conn:
         person_id = _person_by_email(conn, email)
-        conn.execute(
+        new = conn.execute(
             "INSERT INTO newsletter_subscribers (email, person_id, source, consent_text) "
             "VALUES (%s, %s, 'website', %s) "
             "ON CONFLICT (email) DO UPDATE SET unsubscribed_at = NULL, "
-            "person_id = COALESCE(newsletter_subscribers.person_id, EXCLUDED.person_id)",
-            (email, person_id, _clean(payload.get("consent_text"), 300) or None))
+            "person_id = COALESCE(newsletter_subscribers.person_id, EXCLUDED.person_id) "
+            "RETURNING (xmax = 0) AS inserted",
+            (email, person_id, _clean(payload.get("consent_text"), 300) or None)).fetchone()["inserted"]
+        known = _known(conn, person_id)
         conn.commit()
+    tasks.add_task(_alert, f"Newsletter signup: {email}" + ("" if new else " (already on the list)"),
+                   [("Email", email), ("In database", known or "No")])
     return {"ok": True}
 
 
 @router.post("/investor")
-def investor(payload: dict = Body(...), x_intake_secret: str | None = Header(None)):
+def investor(tasks: BackgroundTasks, payload: dict = Body(...), x_intake_secret: str | None = Header(None)):
     _check_secret(x_intake_secret)
     if _clean(payload.get("website"), 50):
         return {"ok": True}
-    first = _clean(payload.get("first_name"), 80)
-    last = _clean(payload.get("last_name"), 80)
+    first = _line(payload.get("first_name"), 80)
+    last = _line(payload.get("last_name"), 80)
     if not first or not last:
         raise HTTPException(400, "first and last name required")
     email = _email(payload.get("email"))
-    phone = _clean(payload.get("phone"), 40) or None
+    phone = _line(payload.get("phone"), 40) or None
     about = ABOUT.get(_clean(payload.get("about"), 30), "not stated")
     check = RANGE.get(_clean(payload.get("range"), 20), "not stated")
     heard = HEARD.get(_clean(payload.get("heard"), 20), "not stated")
@@ -110,6 +150,7 @@ def investor(payload: dict = Body(...), x_intake_secret: str | None = Header(Non
     with db.connect() as conn:
         ben = _ben_id(conn)
         pid = _person_by_email(conn, email)
+        known = _known(conn, pid)  # before any update, so it shows who they were
         if pid is None:
             pid = conn.execute(
                 "INSERT INTO people (full_name, first_name, last_name, roles, phone, source, notes) "
@@ -151,4 +192,9 @@ def investor(payload: dict = Body(...), x_intake_secret: str | None = Header(Non
             "ON CONFLICT (email) DO UPDATE SET "
             "person_id = COALESCE(newsletter_subscribers.person_id, EXCLUDED.person_id)", (email, pid))
         conn.commit()
+    tasks.add_task(
+        _alert, f"Website investor: {full}" + (" (already in database)" if known else ""),
+        [("Name", full), ("Email", email), ("Phone", phone or ""), ("Describes self as", about),
+         ("Range", check), ("Heard via", heard), ("In database", known or "No, added as untiered LP prospect")],
+        message)
     return {"ok": True}
