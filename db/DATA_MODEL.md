@@ -104,10 +104,16 @@ One row per human. The relationship tracker's LP columns and the call list's own
 | owner_score | int | call-list score |
 | owner_tier | text CHECK (T1, T2, T3, T4) | |
 | warmth | text CHECK (hot, warm, cold, closed) | capital partners and operators |
+| outreach_segment | text CHECK (practice_owner, trades_owner, passive_investor, lp_referral, other) | LP cold outreach target group (migration 026) |
+| outreach_stage | text CHECK (sourced, requested, connected, conversation, call_held, nurture, closed) | where the person is in LP outreach; null = not in outreach (026) |
+| accredited | text CHECK (yes, likely, no, unknown) | Ben's read from the first call (026) |
+| relationship_established_on | date | first substantive conversation; the 506(b) pre-existing-relationship record (026) |
 | notes | text | |
 | source, source_id | text | |
 | merged_into_id | FK people | |
 | created_at, updated_at | timestamptz | |
+
+LP outreach (migration 026, playbook in `capital/cold-outreach-playbook-v01.md`): `scripts/import_outreach.py` loads a CSV at stage `sourced` with no roles (cold names stay off the LP list). `scripts/log_touch.py --stage X` moves a person along and writes one `interactions` row per stage (source `outreach`, source_id `<person_id>:<stage>`, idempotent); `conversation` and later add `lp_prospect`; `call_held` sets `relationship_established_on` if empty. The likely check reuses `lp_indicated_cents`. Views: `v_outreach_pipeline` (everyone in outreach with last touch and next action) and `v_outreach_weekly` (stage events per Monday-start week and segment). Tracker tabs "Outreach" and "Outreach funnel".
 
 ### people_emails [P1]
 | column | type | notes |

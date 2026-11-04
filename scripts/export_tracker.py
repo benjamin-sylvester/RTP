@@ -53,6 +53,19 @@ TABS = {
         FROM people p LEFT JOIN organizations o ON o.id=p.org_id
         WHERE p.roles && ARRAY['operator_partner','connector','personal']::text[] AND p.merged_into_id IS NULL ORDER BY p.full_name""",
         [18, 26, 30, 16, 30, 30, 10, 40, 60]),
+    "Outreach": ("""
+        SELECT outreach_stage AS "Stage", full_name AS "Name", COALESCE(title,'') AS "Title", COALESCE(organization,'') AS "Firm",
+               COALESCE(city,'') AS "City", COALESCE(outreach_segment,'') AS "Segment", COALESCE(accredited,'') AS "Accredited",
+               COALESCE(lp_indicated_cents/100,0) AS "Likely $", COALESCE(to_char(relationship_established_on,'MM/DD/YY'),'') AS "Relationship since",
+               COALESCE(to_char(last_interaction,'MM/DD/YY'),'') AS "Last touch", COALESCE(last_summary,'') AS "Last touch note",
+               COALESCE(next_action,'') AS "Next step", COALESCE(linkedin_url,'') AS "LinkedIn"
+        FROM v_outreach_pipeline
+        ORDER BY array_position(ARRAY['call_held','nurture','conversation','connected','requested','sourced','closed'], outreach_stage), full_name""",
+        [12, 26, 24, 26, 14, 16, 10, 10, 12, 10, 40, 30, 34]),
+    "Outreach funnel": ("""
+        SELECT to_char(week_of,'MM/DD/YY') AS "Week of", segment AS "Segment", requested AS "Requested", connected AS "Connected",
+               conversations AS "Conversations", calls AS "Calls", to_nurture AS "To nurture", closed AS "Closed"
+        FROM v_outreach_weekly ORDER BY week_of DESC, segment""", [10, 18, 10, 10, 13, 8, 10, 8]),
     "Brokers": ("""
         SELECT broker AS "Broker", COALESCE(broker_email,'') AS "Email", sum(listings_sent) AS "Listings sent", sum(active_now) AS "Active now",
                sum(bid_on) AS "Bid on", COALESCE(to_char(max(last_interaction),'MM/DD/YY'),'') AS "Last touch"

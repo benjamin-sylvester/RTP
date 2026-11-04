@@ -7,6 +7,11 @@ review and by Claude sessions; replaces editing the tracker xlsx).
       [--done "<action title substring>"]        mark an open action done
       [--note "..."]                             append to the person's notes
       [--tier B] [--deal 349]                    LP tier; link the touch to a listing id
+      [--stage requested|connected|conversation|call_held|nurture|closed]   LP outreach stage (migration 026);
+          logs a dated stage interaction (source 'outreach'); conversation and later add lp_prospect;
+          call_held sets relationship_established_on if empty
+      [--segment practice_owner] [--accredited likely] [--check 100000]   outreach fields; --check is the likely check in dollars
+      [--linkedin URL] [--title ...] [--city ...] [--state NH]
   --find "brott"                                 search people
 
 Creates the person (and org) if missing. Idempotent on (source, source_id) for touches.
@@ -16,6 +21,11 @@ import datetime as dt
 import sys
 
 from _conn import connect
+
+# Outreach stages in order, with the channel their stage interaction is logged on (migration 026)
+STAGE_CHANNEL = {"sourced": "other", "requested": "linkedin", "connected": "linkedin", "conversation": "linkedin",
+                 "call_held": "call", "nurture": "other", "closed": "other"}
+SEGMENTS = ["practice_owner", "trades_owner", "passive_investor", "lp_referral", "other"]
 
 
 def main():
@@ -27,6 +37,9 @@ def main():
     ap.add_argument("--source"); ap.add_argument("--source-id"); ap.add_argument("--deal", type=int)
     ap.add_argument("--action"); ap.add_argument("--due"); ap.add_argument("--done")
     ap.add_argument("--category", choices=["deal", "capital", "property", "admin", "network"]); ap.add_argument("--details")
+    ap.add_argument("--stage", choices=list(STAGE_CHANNEL)); ap.add_argument("--segment", choices=SEGMENTS)
+    ap.add_argument("--accredited", choices=["yes", "likely", "no", "unknown"]); ap.add_argument("--check", type=int)
+    ap.add_argument("--linkedin"); ap.add_argument("--title"); ap.add_argument("--city"); ap.add_argument("--state")
     a = ap.parse_args()
     c = connect(autocommit=False)
     ben = c.execute("SELECT id FROM people WHERE full_name='Ben Sylvester'").fetchone()[0]
@@ -65,6 +78,24 @@ def main():
                 c.execute("UPDATE people SET org_id=COALESCE(org_id,%s) WHERE id=%s", (oid, pid))
         if a.email and not c.execute("SELECT 1 FROM people_emails WHERE email=%s", (a.email.lower(),)).fetchone():
             c.execute("INSERT INTO people_emails (person_id, email) VALUES (%s,%s)", (pid, a.email.lower()))
+        for col, val in (("linkedin_url", a.linkedin), ("title", a.title), ("city", a.city), ("state", a.state),
+                         ("outreach_segment", a.segment), ("accredited", a.accredited)):
+            if val:
+                c.execute(f"UPDATE people SET {col}=%s WHERE id=%s", (val, pid))
+        if a.check is not None:
+            c.execute("UPDATE people SET lp_indicated_cents=%s WHERE id=%s", (a.check * 100, pid))
+        if a.stage:
+            when = dt.datetime.fromisoformat(a.when) if a.when else dt.datetime.now()
+            c.execute("UPDATE people SET outreach_stage=%s WHERE id=%s", (a.stage, pid))
+            if a.stage in ("conversation", "call_held", "nurture"):
+                c.execute("UPDATE people SET roles=(SELECT array_agg(DISTINCT x) FROM unnest(roles || ARRAY['lp_prospect']) x) WHERE id=%s", (pid,))
+            if a.stage == "call_held":
+                c.execute("UPDATE people SET relationship_established_on=COALESCE(relationship_established_on, %s) WHERE id=%s", (when.date(), pid))
+            if not c.execute("SELECT 1 FROM interactions WHERE source='outreach' AND source_id=%s", (f"{pid}:{a.stage}",)).fetchone():
+                c.execute("INSERT INTO interactions (person_id, channel, direction, occurred_at, summary, by_person_id, source, source_id) "
+                          "VALUES (%s,%s,'outbound',%s,%s,%s,'outreach',%s)",
+                          (pid, STAGE_CHANNEL[a.stage], when, f"Outreach stage: {a.stage}", ben, f"{pid}:{a.stage}"))
+            print(f"outreach stage {a.stage} for #{pid}")
         if a.note:
             c.execute("UPDATE people SET notes = CASE WHEN notes IS NULL THEN %s ELSE notes || E'\\n' || %s END WHERE id=%s", (a.note, a.note, pid))
         if a.touch:
