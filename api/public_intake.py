@@ -4,7 +4,9 @@ X-Intake-Secret header (INTAKE_SECRET), which only the Cloudflare Pages Function
 knows. If INTAKE_SECRET is unset the endpoints are off. Responses never say whether an email
 already exists.
 Each real submission also emails Ben an alert (INTAKE_ALERT_TO, else DISPATCH_EMAIL) through the
-shared Gmail client, after the response is sent. No Gmail settings = no alert, form still works."""
+shared Gmail client, after the response is sent. No Gmail settings = no alert, form still works.
+A first-time submitter also gets a short confirmation from the account in CONFIRM_REFRESH_TOKEN
+(meant to be ben@rtprei.com). Unset = no confirmation."""
 import hmac
 import html
 import os
@@ -79,6 +81,44 @@ def _alert(subject, rows, note=""):
         print(f"[intake] alert failed: {e}")
 
 
+CONFIRM_INVESTOR = ("Thanks for reaching out, {first}",
+"""Hi {first},
+
+Thanks for joining the Rising Tide Partners investor list. I'll reach out personally within two business days to introduce myself and hear what you're looking for.
+
+You'll also get our occasional updates on our portfolio and New England real estate.
+
+Ben Sylvester
+Rising Tide Partners
+rtprei.com""")
+
+CONFIRM_NEWSLETTER = ("You're subscribed to Rising Tide Partners updates",
+"""Hi,
+
+Thanks for subscribing. You'll get occasional notes on our portfolio and New England real estate.
+
+If you didn't sign up, reply to this email and I'll take you off the list.
+
+Ben Sylvester
+Rising Tide Partners
+rtprei.com""")
+
+
+def _confirm(to, template, **kw):
+    """Short confirmation to the person who submitted. Background task; never raises."""
+    token = os.environ.get("CONFIRM_REFRESH_TOKEN")
+    if not token:
+        return
+    try:
+        from ingest import gmail_client as gc
+        subject, text = template[0].format(**kw), template[1].format(**kw)
+        page = "".join(f"<p style='font-family:Arial,sans-serif;font-size:14px'>{html.escape(p).replace(chr(10), '<br>')}</p>"
+                       for p in text.split("\n\n"))
+        gc.send_html(gc.service(token), to, subject, page, text)
+    except Exception as e:
+        print(f"[intake] confirmation failed: {e}")
+
+
 def _known(conn, pid):
     if pid is None:
         return ""
@@ -127,6 +167,8 @@ def newsletter(tasks: BackgroundTasks, payload: dict = Body(...), x_intake_secre
         conn.commit()
     tasks.add_task(_alert, f"Newsletter signup: {email}" + ("" if new else " (already on the list)"),
                    [("Email", email), ("In database", known or "No")])
+    if new:
+        tasks.add_task(_confirm, email, CONFIRM_NEWSLETTER)
     return {"ok": True}
 
 
@@ -141,9 +183,10 @@ def investor(tasks: BackgroundTasks, payload: dict = Body(...), x_intake_secret:
         raise HTTPException(400, "first and last name required")
     email = _email(payload.get("email"))
     phone = _line(payload.get("phone"), 40) or None
-    about = ABOUT.get(_clean(payload.get("about"), 30), "not stated")
-    check = RANGE.get(_clean(payload.get("range"), 20), "not stated")
-    heard = HEARD.get(_clean(payload.get("heard"), 20), "not stated")
+    # the form stopped asking these 11/17/26; kept so an old cached page still records them
+    about = ABOUT.get(_clean(payload.get("about"), 30), "")
+    check = RANGE.get(_clean(payload.get("range"), 20), "")
+    heard = HEARD.get(_clean(payload.get("heard"), 20), "")
     message = _clean(payload.get("message"), 2000)
     full = f"{first} {last}"
 
@@ -166,9 +209,9 @@ def investor(tasks: BackgroundTasks, payload: dict = Body(...), x_intake_secret:
                 "ELSE array_append(roles, 'lp_prospect') END, updated_at = now() WHERE id = %s",
                 (phone, pid))
 
-        summary = f"Website investor form. Describes self as: {about}. Check size range: {check}. Heard about us via: {heard}."
-        if message:
-            summary += f" Note: {message}"
+        extras = " ".join(f"{k}: {v}." for k, v in (("Describes self as", about), ("Check size range", check),
+                                                      ("Heard about us via", heard)) if v)
+        summary = "Website investor form." + (f" {extras}" if extras else "") + (f" Note: {message}" if message else "")
         conn.execute(
             "INSERT INTO interactions (person_id, channel, direction, occurred_at, summary, by_person_id, source, source_id) "
             "VALUES (%s, 'other', 'inbound', now(), %s, %s, 'website_investor', %s)",
@@ -182,7 +225,7 @@ def investor(tasks: BackgroundTasks, payload: dict = Body(...), x_intake_secret:
                 "INSERT INTO action_items (person_id, category, title, details, due_on, status, owner_person_id, source) "
                 "VALUES (%s, 'capital', %s, %s, now()::date + 1, 'open', %s, 'website_investor')",
                 (pid, f"Reply to {full} (website investor form)",
-                 f"Email: {email}. " + (f"Phone: {phone}. " if phone else "") + f"About: {about}. Range: {check}. Heard via: {heard}. "
+                 f"Email: {email}. " + (f"Phone: {phone}. " if phone else "") + (f"{extras} " if extras else "")
                  + (f"Note: {message[:400]}" if message else ""), ben))
 
         # everyone gets the newsletter; the form says so. Re-submitting does not undo an unsubscribe
@@ -197,4 +240,6 @@ def investor(tasks: BackgroundTasks, payload: dict = Body(...), x_intake_secret:
         [("Name", full), ("Email", email), ("Phone", phone or ""), ("Describes self as", about),
          ("Range", check), ("Heard via", heard), ("In database", known or "No, added as untiered LP prospect")],
         message)
+    if not open_item:  # a repeat while the reply is still pending gets no second confirmation
+        tasks.add_task(_confirm, email, CONFIRM_INVESTOR, first=first)
     return {"ok": True}
