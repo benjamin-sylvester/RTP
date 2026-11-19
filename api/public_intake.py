@@ -81,25 +81,26 @@ def _alert(subject, rows, note=""):
         print(f"[intake] alert failed: {e}")
 
 
-CONFIRM_INVESTOR = ("Thanks for reaching out, {first}",
-"""Hi {first},
+# Casual on purpose (Ben, 11/19/26): no promise of a call, just thanks and what they'll get
+CONFIRM_INVESTOR = ("Thanks for signing up, {first}",
+"""Hey {first},
 
-Thanks for joining the Rising Tide Partners investor list. I'll reach out personally within two business days to introduce myself and hear what you're looking for.
+Thanks for signing up. Look forward to having you.
 
-You'll also get our occasional updates on our portfolio and New England real estate.
+You'll get a short monthly email from me on New England real estate: rents, sales and what I'm seeing in southern New Hampshire. If you ever want to talk, just reply.
 
-Ben Sylvester
+Ben
 Rising Tide Partners
 rtprei.com""")
 
-CONFIRM_NEWSLETTER = ("You're subscribed to Rising Tide Partners updates",
-"""Hi,
+CONFIRM_NEWSLETTER = ("Thanks for signing up",
+"""Hey,
 
-Thanks for subscribing. You'll get occasional notes on our portfolio and New England real estate.
+Thanks for signing up. Look forward to having you.
 
-If you didn't sign up, reply to this email and I'll take you off the list.
+You'll get a short monthly email from me on New England real estate: rents, sales and what I'm seeing in southern New Hampshire. If you ever want to talk, just reply.
 
-Ben Sylvester
+Ben
 Rising Tide Partners
 rtprei.com""")
 
